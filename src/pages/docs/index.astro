@@ -1,0 +1,46 @@
+---
+import { getCollection } from 'astro:content';
+import Docs from '../../layouts/Docs.astro';
+
+const pages = (await getCollection('docs')).sort((a, b) => a.data.order - b.data.order);
+---
+<Docs title="Docs" description="Inkwall documentation: getting started, how it works, policies and the roadmap.">
+  <h1>Documentation</h1>
+  <p class="lede">
+    Inkwall is in early development. These pages cover what runs today and say clearly where something is
+    still being built. The design documents in the
+    <a href="https://github.com/inkwall-dev/inkwall/tree/main/docs/design">main repository</a> go deeper.
+  </p>
+  <ul class="toc">
+    {pages.map((p) => (
+      <li>
+        <a href={`/docs/${p.id}/`}>{p.data.title}</a>
+        <span>{p.data.description}</span>
+      </li>
+    ))}
+  </ul>
+</Docs>
+
+<style>
+  .toc {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    gap: 0.8rem;
+  }
+  .toc li {
+    display: grid;
+    gap: 0.1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.9rem 1.1rem;
+    background: var(--bg-raised);
+  }
+  .toc a {
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .toc span {
+    color: var(--text-muted);
+  }
+</style>

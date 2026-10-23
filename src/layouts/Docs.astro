@@ -1,0 +1,75 @@
+---
+import { getCollection } from 'astro:content';
+import Base from './Base.astro';
+
+interface Props {
+  title: string;
+  description: string;
+  // Path of the page in the inkwall-website repository, for the edit link.
+  source?: string;
+}
+
+const { title, description, source } = Astro.props;
+const pages = (await getCollection('docs')).sort((a, b) => a.data.order - b.data.order);
+const path = Astro.url.pathname.replace(/\/$/, '');
+---
+<Base title={title} description={description}>
+  <div class="container docs">
+    <nav class="sidebar" aria-label="Docs">
+      <a href="/docs/" aria-current={path === '/docs' ? 'page' : undefined}>Overview</a>
+      {pages.map((p) => (
+        <a href={`/docs/${p.id}/`} aria-current={path === `/docs/${p.id}` ? 'page' : undefined}>{p.data.title}</a>
+      ))}
+    </nav>
+    <article class="prose">
+      <slot />
+      {source && (
+        <p class="edit"><a href={`https://github.com/inkwall-dev/website/edit/main/${source}`}>Edit this page on GitHub</a></p>
+      )}
+    </article>
+  </div>
+</Base>
+
+<style>
+  .docs {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    padding-top: 2.5rem;
+  }
+  @media (min-width: 860px) {
+    .docs {
+      grid-template-columns: 220px 1fr;
+      gap: 3rem;
+    }
+    .sidebar {
+      position: sticky;
+      top: 84px;
+      align-self: start;
+      flex-direction: column;
+      border: 0;
+      padding: 0;
+    }
+  }
+  .sidebar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 1rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1rem;
+    font-size: 0.95rem;
+  }
+  .sidebar a {
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 0.2rem 0;
+  }
+  .sidebar a[aria-current='page'] {
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .edit {
+    margin-top: 3rem;
+    font-size: 0.9rem;
+  }
+</style>

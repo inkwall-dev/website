@@ -1,0 +1,57 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+
+const posts = (await getCollection('blog', ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.date.valueOf() - a.data.date.valueOf(),
+);
+const fmt = new Intl.DateTimeFormat('en', { dateStyle: 'long', timeZone: 'UTC' });
+---
+<Base title="Blog" description="News and engineering notes from the Inkwall project.">
+  <div class="container prose-wrap">
+    <h1>Blog</h1>
+    <p class="lede">News and engineering notes from the Inkwall project. <a href="/rss.xml">RSS</a></p>
+    <ul class="posts">
+      {posts.map((p) => (
+        <li>
+          <time datetime={p.data.date.toISOString()}>{fmt.format(p.data.date)}</time>
+          <a href={`/blog/${p.id}/`}>{p.data.title}</a>
+          <p>{p.data.description}</p>
+        </li>
+      ))}
+    </ul>
+  </div>
+</Base>
+
+<style>
+  .prose-wrap {
+    padding-top: 2.5rem;
+    max-width: 780px;
+  }
+  h1 {
+    font-size: clamp(1.9rem, 4vw, 2.4rem);
+    letter-spacing: -0.02em;
+    margin: 0 0 0.4rem;
+  }
+  .posts {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    gap: 1.6rem;
+  }
+  .posts a {
+    display: block;
+    font-size: 1.25rem;
+    font-weight: 650;
+    text-decoration: none;
+    margin: 0.15rem 0;
+  }
+  .posts time {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+  }
+  .posts p {
+    margin: 0;
+    color: var(--text-muted);
+  }
+</style>

@@ -1,0 +1,331 @@
+---
+import Base from '../layouts/Base.astro';
+
+const features = [
+  {
+    title: 'Standard rules',
+    body: 'Built on OWASP Coraza and the OWASP Core Rule Set v4, embedded in the engine. Your own rules and exclusions are written in SecLang, the ModSecurity rule language.',
+  },
+  {
+    title: 'Fast by design',
+    body: 'The engine runs next to the proxy, inside its pod, and skips what doesn’t need inspection before any rule runs. Benchmarks gate every pull request.',
+  },
+  {
+    title: 'Safe by default',
+    body: 'New routes start in detect mode: log, never block. In block mode nothing is forwarded uninspected; a request that can’t be inspected in time is rejected.',
+  },
+  {
+    title: 'Policy as Kubernetes objects',
+    body: 'Write a WAFPolicy against an Ingress. Rules are compiled when you save them, so a typo is a kubectl error with a line number, not an outage.',
+  },
+  {
+    title: 'Test rules without traffic',
+    body: 'inkwallctl test shows the verdict and matching rules for a request, a raw HTTP file or a browser HAR, and works as a CI check for rule changes.',
+  },
+  {
+    title: 'GitOps first, SaaS optional',
+    body: 'The objects in Git are the source of truth and everything enforces offline. Open source under Apache 2.0.',
+  },
+];
+
+type State = 'works' | 'progress' | 'planned';
+const integrations: { name: string; hook: string; state: State; note: string }[] = [
+  { name: 'Standalone reverse proxy', hook: 'HTTP', state: 'works', note: 'In front of any HTTP service, in or out of Kubernetes' },
+  { name: 'Traefik', hook: 'ForwardAuth', state: 'works', note: 'Engine as a sidecar, tested on kind; wiring by the operator in progress' },
+  { name: 'Any proxy with a hook', hook: 'POST /v1/check', state: 'works', note: 'The engine’s own API, protobuf or JSON' },
+  { name: 'Kubernetes operator', hook: 'CRDs', state: 'progress', note: 'CRDs, validating webhook and signed policy bundles; delivery to the engines next' },
+  { name: 'Envoy, Envoy Gateway, Istio', hook: 'ext_proc / ext_authz', state: 'planned', note: '' },
+  { name: 'ingress-nginx', hook: 'Lua plugin', state: 'planned', note: '' },
+  { name: 'HAProxy', hook: 'SPOE', state: 'planned', note: '' },
+  { name: 'Caddy', hook: 'Module', state: 'planned', note: '' },
+];
+const label: Record<State, string> = { works: 'Works today', progress: 'In progress', planned: 'Planned' };
+---
+<Base
+  title="Inkwall"
+  description="Inkwall is a Kubernetes-native web application firewall: one policy, every ingress and gateway, built on OWASP Coraza and the Core Rule Set."
+>
+  <section class="hero">
+    <div class="container">
+      <p class="status"><span class="dot" aria-hidden="true"></span> Early development: the engine works today, the operator is being built</p>
+      <h1>One web application firewall for every ingress in your cluster</h1>
+      <p class="sub">
+        Inkwall protects HTTP traffic behind any proxy with the same policy. Write a <code>WAFPolicy</code>,
+        and the operator wires the engine into the proxy that serves the route, using that proxy’s own hook.
+      </p>
+      <div class="cta">
+        <a class="button primary" href="/docs/getting-started/">Get started</a>
+        <a class="button" href="https://github.com/inkwall-dev/inkwall">View on GitHub</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="container section">
+    <div class="split">
+      <div>
+        <h2>One WAF per proxy is a tax</h2>
+        <p>
+          Running a WAF in Kubernetes usually means one per proxy: ModSecurity for ingress-nginx, a plugin for
+          Traefik, a WASM filter for Envoy, an agent for HAProxy, each with its own configuration, rules and
+          failure modes. Change your ingress, and you rebuild your WAF.
+        </p>
+        <p>
+          Inkwall makes the WAF a Kubernetes primitive, the way cert-manager did for TLS. Policies stay the same
+          when you move routes from one proxy to another.
+        </p>
+      </div>
+      <ol class="steps">
+        <li><strong>The operator</strong> watches your routes and policies, injects the engine next to the proxy and wires it in.</li>
+        <li><strong>The engine</strong> answers the proxy’s own protocol and returns allow or deny before the request reaches your app.</li>
+        <li><strong>Status</strong> on each policy shows how far it got: accepted, programmed into the proxy, enforced by every engine.</li>
+      </ol>
+    </div>
+    <figure class="diagram">
+      <div class="diagram-scroll" tabindex="0" role="region" aria-label="Architecture diagram, scrolls sideways on small screens">
+      <img
+        src="/diagrams/system-overview.svg"
+        width="890"
+        height="542"
+        alt="Clients reach the proxy, which asks the inkwall-engine sidecar for a verdict before forwarding allowed requests to services. The operator watches policies and routes and pushes signed policy bundles to the engine."
+      />
+      </div>
+      <figcaption><a href="/diagrams/system-overview.svg">The target architecture</a>. The operator’s bundle distribution is being built.</figcaption>
+    </figure>
+  </section>
+
+  <section class="container section">
+    <h2>What you get</h2>
+    <div class="grid">
+      {features.map((f) => (
+        <article class="card">
+          <h3>{f.title}</h3>
+          <p>{f.body}</p>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <section class="container section" id="status">
+    <h2>Where things stand</h2>
+    <p class="muted">No release exists yet. This table is kept honest: it lists what you can run today and what is still ahead.</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th scope="col">Integration</th><th scope="col">Hook</th><th scope="col">Status</th><th scope="col">Notes</th></tr>
+        </thead>
+        <tbody>
+          {integrations.map((i) => (
+            <tr>
+              <td>{i.name}</td>
+              <td><code>{i.hook}</code></td>
+              <td><span class:list={['pill', i.state]}>{label[i.state]}</span></td>
+              <td class="muted">{i.note}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="container section">
+    <div class="split">
+      <div>
+        <h2>Try the engine in a minute</h2>
+        <p>
+          The engine runs today as a reverse proxy in front of any HTTP service, with the Core Rule Set built in.
+          It starts in detect mode; <code>--mode block</code> enforces.
+        </p>
+        <p><a href="/docs/getting-started/">Getting started</a> also covers the Traefik setup on a local kind cluster.</p>
+      </div>
+      <pre><code>$ make build
+$ ./bin/inkwall-engine proxy \
+    --upstream http://localhost:3000 --mode block
+$ curl -s -o /dev/null -w '%&#123;http_code&#125;\n' \
+    'localhost:8480/?id=1%27%20OR%20%271%27%3D%271'
+403</code></pre>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .hero {
+    padding: 4.5rem 0 3rem;
+    border-bottom: 1px solid var(--border);
+    background:
+      radial-gradient(60rem 20rem at 85% -10%, var(--accent-soft), transparent 70%),
+      var(--bg);
+  }
+  .hero h1 {
+    font-size: clamp(2.1rem, 5.5vw, 3.6rem);
+    line-height: 1.08;
+    letter-spacing: -0.03em;
+    margin: 0.8rem 0 1rem;
+    max-width: 18ch;
+  }
+  .sub {
+    font-size: clamp(1.05rem, 2vw, 1.25rem);
+    color: var(--text-muted);
+    max-width: 60ch;
+    margin: 0 0 1.8rem;
+  }
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0.3rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg-raised);
+    color: var(--text-muted);
+    font-size: 0.9rem;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--warn);
+  }
+  .cta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .button {
+    display: inline-block;
+    padding: 0.65rem 1.15rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-raised);
+    color: var(--text);
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .button.primary:hover {
+    background: var(--accent-strong);
+    color: #fff;
+  }
+  .section {
+    padding-top: 4rem;
+  }
+  .section h2 {
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    letter-spacing: -0.02em;
+    margin: 0 0 0.8rem;
+  }
+  .split {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2rem;
+    align-items: start;
+  }
+  @media (min-width: 860px) {
+    .split {
+      grid-template-columns: 1.1fr 1fr;
+      gap: 3rem;
+    }
+  }
+  .steps {
+    margin: 0;
+    padding-left: 1.2rem;
+    display: grid;
+    gap: 0.9rem;
+  }
+  .diagram {
+    margin: 2.5rem 0 0;
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-raised);
+    box-shadow: var(--shadow);
+  }
+  .diagram-scroll {
+    overflow-x: auto;
+  }
+  .diagram img {
+    display: block;
+    margin: 0 auto;
+    /* Below this width the labels are unreadable: scroll instead. */
+    min-width: 640px;
+    max-width: 100%;
+    height: auto;
+  }
+  figcaption {
+    margin-top: 0.6rem;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    text-align: center;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+    gap: 1rem;
+    margin-top: 1.2rem;
+  }
+  .card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-raised);
+    padding: 1.2rem 1.3rem;
+  }
+  .card h3 {
+    margin: 0 0 0.4rem;
+    font-size: 1.08rem;
+  }
+  .card p {
+    margin: 0;
+    color: var(--text-muted);
+  }
+  .muted {
+    color: var(--text-muted);
+  }
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-raised);
+    margin-top: 1rem;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+  }
+  th,
+  td {
+    text-align: left;
+    padding: 0.7rem 1rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tbody tr:last-child td {
+    border-bottom: 0;
+  }
+  th {
+    font-weight: 600;
+    background: var(--bg-sunken);
+  }
+  .pill {
+    display: inline-block;
+    white-space: nowrap;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border: 1px solid currentColor;
+  }
+  .pill.works {
+    color: var(--ok);
+  }
+  .pill.progress {
+    color: var(--warn);
+  }
+  .pill.planned {
+    color: var(--text-muted);
+  }
+</style>
