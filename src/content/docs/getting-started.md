@@ -1,88 +1,102 @@
 ---
 title: Getting started
-description: Run the engine in front of a service, then try it behind Traefik on a local kind cluster.
+description: Install Inkwall with Helm, protect a Traefik route, and check that attacks are blocked.
 order: 1
 ---
 
-> Inkwall has no release yet, so you build it from source. You need Go 1.26 and, for the Kubernetes
-> part, Docker, [kind](https://kind.sigs.k8s.io/), kubectl and Helm.
+> Inkwall v0.1.0 works with **Traefik** and **`Ingress`** routes. You need Kubernetes 1.29 or later,
+> Helm 3, and Traefik in the cluster. The API is `v1alpha1` and will change.
+
+## Install
 
 ```sh
-git clone https://github.com/inkwall-dev/inkwall.git
-cd inkwall
-make build   # bin/inkwall-engine, bin/inkwallctl, bin/inkwall-operator
+helm install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.1.0 \
+  --namespace inkwall-system --create-namespace
 ```
 
-## The engine as a reverse proxy
+Then install Traefik, or restart it if it already runs: Traefik pods started after the operator get
+the engine as a sidecar.
 
-The engine runs in front of any HTTP service and inspects every request with the OWASP Core Rule
-Set, which is built into the binary:
+```sh
+kubectl -n <traefik namespace> rollout restart deployment/<traefik>
+```
+
+## Protect a route
+
+Attach a `WAFPolicy` to an `Ingress` that Traefik serves:
+
+```yaml
+apiVersion: waf.inkwall.dev/v1alpha1
+kind: WAFPolicy
+metadata:
+  name: web
+  namespace: shop
+spec:
+  targetRefs: [{kind: Ingress, name: web}]
+  mode: Block   # the default, Detect, logs and never blocks
+```
+
+The operator adds its ForwardAuth middleware to the Ingress and sends the policy to every engine.
+The policy is `Ready` once it is wired and every engine runs it:
 
 ```console
-$ ./bin/inkwall-engine proxy --upstream http://localhost:3000 --mode block
+$ kubectl get wafpolicy -n shop
+NAME   MODE    READY   BUNDLE   AGE
+web    Block   True    2        3s
+$ curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: shop.example.com' \
+    "http://$TRAEFIK/?id=1%27%20OR%20%271%27%3D%271"
+403
+```
+
+Start in `Detect` mode, check the logs for false positives, tune them with
+[exclusions](/docs/policies/), then switch to `Block`.
+
+## Verify the release
+
+Images, the chart and the binaries' checksums are signed keyless with cosign, from the release
+workflow:
+
+```sh
+cosign verify ghcr.io/inkwall-dev/inkwall-engine:0.1.0 \
+  --certificate-identity-regexp '^https://github.com/inkwall-dev/inkwall/\.github/workflows/release\.yaml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+The images (`linux/amd64`, `linux/arm64`) also carry an SBOM and build provenance.
+
+## Without Kubernetes
+
+The engine is also a reverse proxy in front of any HTTP service. Get `inkwall-engine` from the
+[releases page](https://github.com/inkwall-dev/inkwall/releases):
+
+```console
+$ inkwall-engine proxy --upstream http://localhost:3000 --mode block
 $ curl -s -o /dev/null -w '%{http_code}\n' 'localhost:8480/?id=1%27%20OR%20%271%27%3D%271'
 403
 ```
 
-Each blocked or detected request produces one JSON log line with the matching rule IDs. Metrics are
-on `:9480/metrics`, health on `:9480/healthz` and `:9480/readyz`.
-
-The defaults are deliberately safe:
-
-- **Detect mode** is the default: the engine logs what it would block and never blocks.
-- In **block mode**, a request that can't be fully inspected (inspection timed out, failed, or the
-  engine is overloaded) is rejected with 503, so padding a request until inspection times out
-  can't get an attack through. `--failure-mode open` prefers availability instead.
-
-Useful flags:
+Main flags (`inkwall-engine proxy -h` for all):
 
 | Flag | Default | Purpose |
 |---|---|---|
 | `--mode` | `detect` | `block` to enforce |
 | `--paranoia-level` | `1` | CRS paranoia level, 1–4 |
-| `--max-body-bytes` | `65536` | Body bytes to inspect |
 | `--rules` | | Your SecLang rules and exclusions, loaded after CRS |
 | `--skip-paths` | | Paths never inspected, e.g. `/healthz,/static/*` |
+| `--max-body-bytes` | `65536` | Body bytes inspected |
+| `--failure-mode` | `auto` | Uninspectable requests: closed in block mode, open in detect mode |
 | `--trusted-proxies` | | CIDRs whose `X-Forwarded-For` is trusted |
-| `--timeout` | `250ms` | Inspection deadline per request |
 
-`./bin/inkwall-engine proxy -h` lists them all.
+Each blocked or detected request logs one JSON line with the rule IDs; metrics are on
+`:9480/metrics`.
 
-## Behind Traefik, on kind
+## Try it locally
 
-`make kind-up` creates a kind cluster with a demo app published twice: behind the engine's reverse
-proxy on `127.0.0.1:30480`, and through Traefik with the engine as a ForwardAuth sidecar on
-`127.0.0.1:30080`, both in block mode.
-
-```sh
-make kind-up     # create the cluster and deploy both paths
-make kind-test   # send benign and attack requests through both, check every verdict
-make kind-down   # delete the cluster
-```
-
-`make kind-test` checks, for both paths, that benign GET, query, JSON and form requests get 200,
-and that SQL injection, XSS, path traversal, command injection and XSS in a JSON body get 403.
-
-In the Traefik setup, `inkwall-engine forward-auth` runs in Traefik's pod and answers the
-ForwardAuth middleware on `127.0.0.1:9001/v1/forward-auth`. Two middleware settings matter:
-
-- `trustForwardHeader: false`, otherwise clients could make the engine inspect a URI of their
-  choice;
-- `forwardBody: true`, otherwise request bodies are not inspected.
-
-Today the sidecar and middleware are written by hand
-([`hack/kind`](https://github.com/inkwall-dev/inkwall/tree/main/hack/kind)). Wiring them from a
-`WAFPolicy` is the operator's job, and is being built now.
-
-## The policy API
-
-The CRDs validate objects on their own, so you can try the API before the operator enforces
-anything:
+From a clone of the [repository](https://github.com/inkwall-dev/inkwall), on a
+[kind](https://kind.sigs.k8s.io/) cluster:
 
 ```sh
-kubectl apply --server-side -f operator/config/crd/bases
-kubectl apply --server-side -f operator/config/samples
-kubectl get inkwall -A
+make kind-up     # a cluster with a demo app behind the engine and behind Traefik
+make kind-e2e    # installs the operator and runs the end-to-end test
+make kind-down
 ```
-
-See [Policies](/docs/policies/) for what a `WAFPolicy` can express.

@@ -4,8 +4,8 @@ description: WAFPolicy, rule sets and how Inkwall validates them before they are
 order: 3
 ---
 
-> The operator validates these objects today. Enforcing them on the engines, through signed policy
-> bundles, is being built. The API is `waf.inkwall.dev/v1alpha1` and will change.
+> The API is `waf.inkwall.dev/v1alpha1` and will change. Samples:
+> [`operator/config/samples`](https://github.com/inkwall-dev/inkwall/tree/main/operator/config/samples).
 
 ## WAFPolicy
 
@@ -39,7 +39,7 @@ spec:
 
 | Field | What it does |
 |---|---|
-| `targetRefs` | The routes to protect: `Ingress` objects. The API also accepts a Gateway API `HTTPRoute`, but the operator doesn't resolve those yet and reports `TargetUnsupported` |
+| `targetRefs` | The routes to protect: `Ingress` objects served by Traefik. The API also accepts a Gateway API `HTTPRoute`, but the operator doesn't resolve those yet and reports `TargetUnsupported` |
 | `mode` | `Detect` (log, let through) or `Block` (reject) |
 | `failureMode` | What happens when a request can't be inspected in time: `Closed` (503) or `Open`. Unset: closed in block mode, open in detect mode |
 | `timeout` | Inspection deadline per request, more than 0 and at most 1s |
@@ -89,6 +89,18 @@ application teams, and those settings belong to the platform.
 
 ## Status
 
-Each policy will report how far it got, as conditions that work with `kubectl wait` and Argo CD:
-`Accepted` (valid, references resolve), `Programmed` (the proxy sends traffic to Inkwall),
-`Enforced` (every engine runs it) and `Ready` (all three).
+Each policy reports how far it got, as conditions that work with `kubectl wait` and Argo CD:
+
+| Condition | True when | Typical reasons when false |
+|---|---|---|
+| `Accepted` | The policy is valid and its references resolve | `InvalidRef`, `TargetUnsupported` |
+| `Programmed` | Traefik sends the routes to the engine | `PendingRestart` (restart Traefik to inject the engine), `SidecarMissing`, `WiringFailed` |
+| `Enforced` | Every engine runs the bundle with this policy | `EnginesBehind`, `EngineNack`, `NoEngines` |
+| `Ready` | All three | The first failing condition's reason |
+
+```console
+$ kubectl get wafpolicy -A
+NAMESPACE   NAME   MODE    READY   BUNDLE   AGE
+shop        web    Block   True    2        3s
+$ kubectl wait wafpolicy/web -n shop --for=condition=Ready
+```

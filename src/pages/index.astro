@@ -31,15 +31,16 @@ const features = [
 type State = 'works' | 'progress' | 'planned';
 const integrations: { name: string; hook: string; state: State; note: string }[] = [
   { name: 'Standalone reverse proxy', hook: 'HTTP', state: 'works', note: 'In front of any HTTP service, in or out of Kubernetes' },
-  { name: 'Traefik', hook: 'ForwardAuth', state: 'works', note: 'Engine as a sidecar, tested on kind; wiring by the operator in progress' },
+  { name: 'Traefik', hook: 'ForwardAuth', state: 'works', note: 'The operator injects the engine and wires Ingress routes; IngressRoute next' },
   { name: 'Any proxy with a hook', hook: 'POST /v1/check', state: 'works', note: 'The engine’s own API, protobuf or JSON' },
-  { name: 'Kubernetes operator', hook: 'CRDs', state: 'progress', note: 'CRDs, validating webhook and signed policy bundles; delivery to the engines next' },
-  { name: 'Envoy, Envoy Gateway, Istio', hook: 'ext_proc / ext_authz', state: 'planned', note: '' },
+  { name: 'Kubernetes operator', hook: 'CRDs', state: 'works', note: 'Validation, signed policy bundles, injection, wiring and status; Helm chart on GHCR' },
+  { name: 'Envoy Gateway (Gateway API)', hook: 'ext_proc / ext_authz', state: 'progress', note: 'Next: milestone v0.3.0' },
+  { name: 'Envoy, Istio', hook: 'ext_proc / ext_authz', state: 'planned', note: '' },
   { name: 'ingress-nginx', hook: 'Lua plugin', state: 'planned', note: '' },
   { name: 'HAProxy', hook: 'SPOE', state: 'planned', note: '' },
   { name: 'Caddy', hook: 'Module', state: 'planned', note: '' },
 ];
-const label: Record<State, string> = { works: 'Works today', progress: 'In progress', planned: 'Planned' };
+const label: Record<State, string> = { works: 'Works today', progress: 'Next', planned: 'Planned' };
 ---
 <Base
   title="Inkwall"
@@ -47,7 +48,7 @@ const label: Record<State, string> = { works: 'Works today', progress: 'In progr
 >
   <section class="hero">
     <div class="container">
-      <p class="status"><span class="dot" aria-hidden="true"></span> Early development: the engine works today, the operator is being built</p>
+      <p class="status"><span class="dot" aria-hidden="true"></span> v0.1.0 is out: Traefik and Ingress routes, installed with Helm</p>
       <h1>One web application firewall for every ingress in your cluster</h1>
       <p class="sub">
         Inkwall protects HTTP traffic behind any proxy with the same policy. Write a <code>WAFPolicy</code>,
@@ -89,7 +90,7 @@ const label: Record<State, string> = { works: 'Works today', progress: 'In progr
         alt="Clients reach the proxy, which asks the inkwall-engine sidecar for a verdict before forwarding allowed requests to services. The operator watches policies and routes and pushes signed policy bundles to the engine."
       />
       </div>
-      <figcaption><a href="/diagrams/system-overview.svg">The target architecture</a>. The operator’s bundle distribution is being built.</figcaption>
+      <figcaption><a href="/diagrams/system-overview.svg">The architecture</a>. Today the proxy is Traefik; the others are planned.</figcaption>
     </figure>
   </section>
 
@@ -107,7 +108,7 @@ const label: Record<State, string> = { works: 'Works today', progress: 'In progr
 
   <section class="container section" id="status">
     <h2>Where things stand</h2>
-    <p class="muted">No release exists yet. This table is kept honest: it lists what you can run today and what is still ahead.</p>
+    <p class="muted">This table is kept honest: it lists what you can run today and what is still ahead. See the <a href="/docs/roadmap/">roadmap</a>.</p>
     <div class="table-wrap">
       <table>
         <thead>
@@ -130,19 +131,20 @@ const label: Record<State, string> = { works: 'Works today', progress: 'In progr
   <section class="container section">
     <div class="split">
       <div>
-        <h2>Try the engine in a minute</h2>
+        <h2>Install in a minute</h2>
         <p>
-          The engine runs today as a reverse proxy in front of any HTTP service, with the Core Rule Set built in.
-          It starts in detect mode; <code>--mode block</code> enforces.
+          Install the operator with Helm, restart Traefik so its pods get the engine, then attach a
+          <code>WAFPolicy</code> to an Ingress. Policies start in detect mode; <code>mode: Block</code> enforces.
         </p>
-        <p><a href="/docs/getting-started/">Getting started</a> also covers the Traefik setup on a local kind cluster.</p>
+        <p><a href="/docs/getting-started/">Getting started</a> walks through it, and covers the engine on its own, without Kubernetes.</p>
       </div>
-      <pre><code>$ make build
-$ ./bin/inkwall-engine proxy \
-    --upstream http://localhost:3000 --mode block
-$ curl -s -o /dev/null -w '%&#123;http_code&#125;\n' \
-    'localhost:8480/?id=1%27%20OR%20%271%27%3D%271'
-403</code></pre>
+      <pre><code>$ helm install inkwall \
+    oci://ghcr.io/inkwall-dev/charts/inkwall \
+    --version 0.1.0 \
+    -n inkwall-system --create-namespace
+$ kubectl get wafpolicy -n shop
+NAME   MODE    READY   BUNDLE   AGE
+web    Block   True    2        3s</code></pre>
     </div>
   </section>
 </Base>
@@ -184,7 +186,7 @@ $ curl -s -o /dev/null -w '%&#123;http_code&#125;\n' \
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--warn);
+    background: var(--ok);
   }
   .cta {
     display: flex;
