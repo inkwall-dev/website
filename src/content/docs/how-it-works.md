@@ -9,6 +9,22 @@ whether it may pass. The **operator** turns the policies you write into configur
 engines and wires each proxy to its engine. The operator is never on the request path: if it is
 down, engines keep enforcing the last policy they received.
 
+## The operator
+
+In v0.1.0, with Traefik:
+
+1. **Validates** policies and rule sets when you save them, compiling the rules with the engine's
+   own Coraza version.
+2. **Injects** the engine into Traefik's pods as a sidecar when they are created.
+3. **Wires** each `Ingress` a policy targets: it adds a ForwardAuth middleware that sends every
+   request to the engine first, keeping your own middlewares.
+4. **Builds a signed bundle** of every policy, and streams it to the engines, which verify the
+   signature and swap policies without a restart.
+5. **Reports** each policy's status, up to `Enforced` by every engine.
+
+An engine that starts while the operator is down reads the bundle from the cluster. While a policy
+is in block mode, a Traefik pod can't start without its engine; see [Operations](/docs/operations/).
+
 ![Clients reach the proxy, which asks the inkwall-engine sidecar for a verdict before forwarding allowed requests. The operator watches policies and routes and pushes signed policy bundles to the engine.](/diagrams/system-overview.svg)
 
 ## The engine
@@ -53,5 +69,5 @@ it inspects the request, then forwards it or answers itself.
 
 ![The engine inspects the request, forwards allowed requests to the app, and answers denied or failed ones itself.](/diagrams/reverse-proxy.svg)
 
-Envoy (`ext_proc`, `ext_authz`), ingress-nginx (a Lua plugin), HAProxy (SPOE) and Caddy (a module)
-are planned; see the [roadmap](/docs/roadmap/).
+Envoy and Gateway API (`ext_proc`, `ext_authz`) come next, then ingress-nginx (a Lua plugin),
+HAProxy (SPOE) and Caddy (a module); see the [roadmap](/docs/roadmap/).

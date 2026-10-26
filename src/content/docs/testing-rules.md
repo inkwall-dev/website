@@ -4,6 +4,9 @@ description: Check verdicts and measure performance without sending real traffic
 order: 4
 ---
 
+`inkwallctl` is on the [releases page](https://github.com/inkwall-dev/inkwall/releases), next to the
+engine.
+
 ## inkwallctl test
 
 `inkwallctl test` shows the verdict and the matching rules for a request, given like a curl
@@ -12,7 +15,7 @@ engine's checks in-process with the same flags as the engine (`--paranoia-level`
 or against a running engine with `--engine`.
 
 ```console
-$ ./bin/inkwallctl test 'http://shop.example.com/?id=1%27%20OR%20%271%27%3D%271'
+$ inkwallctl test 'http://shop.example.com/?id=1%27%20OR%20%271%27%3D%271'
 deny  403  GET /?id=1%27%20OR%20%271%27%3D%271  reason=rule  rules=942100,949110  interrupting=949110  847µs
 ```
 
@@ -20,7 +23,7 @@ deny  403  GET /?id=1%27%20OR%20%271%27%3D%271  reason=rule  rules=942100,949110
 flow with your exclusions, and fail the build if a legitimate request would be blocked.
 
 ```sh
-./bin/inkwallctl test --rules my-exclusions.conf --expect allow --har checkout-flow.har
+inkwallctl test --rules my-exclusions.conf --expect allow --har checkout-flow.har
 ```
 
 ## inkwallctl bench
