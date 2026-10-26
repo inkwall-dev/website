@@ -1,7 +1,7 @@
 # inkwall.dev
 
-The website of [Inkwall](https://github.com/inkwall-dev/inkwall): landing page, docs and blog.
-Built with [Astro](https://astro.build/) as a fully static site, served by Cloudflare Pages.
+The website of [Inkwall](https://github.com/inkwall-dev/inkwall): landing page, docs and blog. A
+static [Astro](https://astro.build/) site on Cloudflare Pages. Node 22 (`.nvmrc`).
 
 ```sh
 npm ci
@@ -9,41 +9,35 @@ npm run dev      # http://localhost:4321
 npm run build    # type check, then build into dist/
 ```
 
-Node 22 (`.nvmrc`).
-
 ## Content
 
 | Path | What |
 |---|---|
-| `src/pages/index.astro` | Landing page, including the "Where things stand" table |
-| `src/content/docs/` | Docs pages (Markdown; `order` sets the sidebar position) |
+| `src/pages/index.astro` | Landing page, with the "Where things stand" table |
+| `src/content/docs/` | Docs (Markdown; `order` sets the sidebar position) |
 | `src/content/blog/` | Blog posts (Markdown; `draft: true` hides one) |
-| `public/diagrams/` | Diagrams, copied from the main repository |
+| `public/diagrams/` | Copies of the main repository's `docs/diagrams/*.svg` |
 
-Keep the site honest about status: say what works today, and mark the rest as in progress or
-planned. Commands and flags shown on the site should be checked against the main repository.
+Say only what the current release does, and check commands and flags against the main repository.
+When the diagrams change there: `cp ../inkwall/docs/diagrams/*.svg public/diagrams/`.
 
-The diagrams are copies of `docs/diagrams/*.svg` in the main repository. When those change, copy
-them again:
+## Checks and deploys
 
-```sh
-cp ../inkwall/docs/diagrams/*.svg public/diagrams/
-```
+`.github/workflows/site.yaml` builds every pull request and push to `main`: `npm ci`, `npm audit` of
+what ships, `npm run build` (type check, then build), and an offline check of every internal link
+and `#anchor` (lychee). Dependabot proposes npm and action updates weekly.
 
-## Deploying
+Cloudflare Pages is connected to this repository and deploys it: a preview for each pull request,
+production (`inkwall.dev`) for `main`.
 
-Cloudflare Pages, connected to this repository:
-
-| Setting | Value |
+| Cloudflare setting | Value |
 |---|---|
 | Production branch | `main` |
 | Build command | `npm run build` |
 | Build output directory | `dist` |
 | Environment variable | `NODE_VERSION` = `22` |
-| Custom domain | `inkwall.dev` |
 
-Pull requests get preview deployments. `public/_headers` sets the security headers: the site loads
-nothing from other origins and runs no scripts.
+`public/_headers` sets the security headers.
 
 ## License
 
