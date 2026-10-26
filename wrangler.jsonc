@@ -6,6 +6,9 @@
   // `wrangler deploy` builds first, so the deploy doesn't depend on the
   // dashboard's build command.
   "build": { "command": "npm run build" },
+  // Pull requests deploy with `wrangler preview`, which needs this block,
+  // even empty; main deploys to production with `wrangler deploy`.
+  "previews": {},
   "assets": {
     "directory": "./dist",
     // dist/404.html for unknown paths, with a 404 status.
