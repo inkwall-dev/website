@@ -1,0 +1,14 @@
+// Cloudflare Workers, connected to this repository, deploys the site as
+// static assets: a preview for pull requests, production for main.
+{
+  "name": "website",
+  "compatibility_date": "2026-10-01",
+  // `wrangler deploy` builds first, so the deploy doesn't depend on the
+  // dashboard's build command.
+  "build": { "command": "npm run build" },
+  "assets": {
+    "directory": "./dist",
+    // dist/404.html for unknown paths, with a 404 status.
+    "not_found_handling": "404-page"
+  }
+}
