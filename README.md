@@ -21,25 +21,23 @@ npm run build    # type check, then build into dist/
 Say only what the current release does, and check commands and flags against the main repository.
 When the diagrams change there: `cp ../inkwall/docs/diagrams/*.svg public/diagrams/`.
 
-## Pipeline
+## Checks and deploys
 
-`.github/workflows/site.yaml`, on every pull request and push to `main`:
+`.github/workflows/site.yaml` builds every pull request and push to `main`: `npm ci`, `npm audit` of
+what ships, `npm run build` (type check, then build), and an offline check of every internal link
+and `#anchor` (lychee). Dependabot proposes npm and action updates weekly.
 
-1. **Build**: `npm ci`, `npm audit` of what ships, `npm run build`, and an offline check of every
-   internal link and `#anchor` (lychee).
-2. **Deploy** to Cloudflare Pages: a pull request gets a preview URL (posted on it), `main` goes to
-   production. Pull requests from forks are built, not deployed.
+Cloudflare Pages is connected to this repository and deploys it: a preview for each pull request,
+production (`inkwall.dev`) for `main`.
 
-Dependabot proposes npm and action updates weekly. `public/_headers` sets the security headers.
+| Cloudflare setting | Value |
+|---|---|
+| Production branch | `main` |
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+| Environment variable | `NODE_VERSION` = `22` |
 
-### Cloudflare setup (once)
-
-1. Create the Pages project for direct upload (not connected to Git, or every commit deploys twice):
-   `npx wrangler@4.149.0 pages project create inkwall-website --production-branch main`
-2. Create an API token with **Account → Cloudflare Pages → Edit**, for your account only.
-3. Add the repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
-4. After the first deploy from `main`: Workers & Pages → `inkwall-website` → Custom domains → add
-   `inkwall.dev`.
+`public/_headers` sets the security headers.
 
 ## License
 
