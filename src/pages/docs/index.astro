@@ -4,12 +4,12 @@ import Docs from '../../layouts/Docs.astro';
 
 const pages = (await getCollection('docs')).sort((a, b) => a.data.order - b.data.order);
 ---
-<Docs title="Docs" description="Inkwall documentation: getting started, how it works, policies, operations and the roadmap.">
+<Docs title="Docs" description="Inkwall documentation: getting started, upgrading, how it works, policies, operations, guides and the roadmap.">
   <h1>Documentation</h1>
   <p class="lede">
-    These pages cover Inkwall v0.1.0: Traefik with Ingress routes, installed with Helm. What isn't built yet
+    These pages cover Inkwall v0.1.2: Traefik with Ingress and IngressRoute routes, installed with Helm. What isn't built yet
     is on the <a href="/docs/roadmap/">roadmap</a>. The design documents in the
-    <a href="https://github.com/inkwall-dev/inkwall/tree/main/docs/design">main repository</a> go deeper.
+    <a href="https://github.com/inkwall-dev/inkwall/tree/v0.1.2/docs/design">main repository</a> go deeper.
   </p>
   <ul class="toc">
     {pages.map((p) => (
