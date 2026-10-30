@@ -1,4 +1,4 @@
-# inkwall.dev
+# website.inkwall.dev
 
 The website of [Inkwall](https://github.com/inkwall-dev/inkwall): landing page, docs and blog. A
 static [Astro](https://astro.build/) site on Cloudflare Pages. Node 22 (`.nvmrc`).
@@ -28,7 +28,7 @@ what ships, `npm run build` (type check, then build), and an offline check of ev
 and `#anchor` (lychee). Dependabot proposes npm and action updates weekly.
 
 Cloudflare Pages is connected to this repository and deploys it: a preview for each pull request,
-production (`inkwall.dev`) for `main`.
+production (`website.inkwall.dev`) for `main`.
 
 | Cloudflare setting | Value |
 |---|---|

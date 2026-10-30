@@ -3,7 +3,7 @@ import { defineConfig } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
 
 export default defineConfig({
-  site: 'https://inkwall.dev',
+  site: 'https://website.inkwall.dev',
   integrations: [sitemap()],
   markdown: {
     // Light and dark code colours; global.css picks one with the page's

@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://inkwall.dev/sitemap-index.xml
+Sitemap: https://website.inkwall.dev/sitemap-index.xml

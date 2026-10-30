@@ -1,6 +1,6 @@
 # Builds and checks the site on every pull request and push to main.
 # Cloudflare Pages, connected to the repository, deploys it: a preview for
-# pull requests, production (inkwall.dev) for main.
+# pull requests, production (website.inkwall.dev) for main.
 name: site
 
 on:
