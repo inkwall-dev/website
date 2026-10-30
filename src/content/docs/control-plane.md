@@ -6,9 +6,9 @@ order: 10
 
 A cluster can connect to an optional control plane, a separate service that sees many clusters in
 one place. This repository holds only the cluster side: the operator's client and the protocol,
-[`api/controlplane/v1`](https://github.com/inkwall-dev/inkwall/blob/v0.1.2/api/controlplane/v1/controlplane.proto).
+[`api/controlplane/v1`](https://github.com/inkwall-dev/inkwall/blob/v0.2.0/api/controlplane/v1/controlplane.proto).
 The full guide is
-[`docs/control-plane.md`](https://github.com/inkwall-dev/inkwall/blob/v0.1.2/docs/control-plane.md).
+[`docs/control-plane.md`](https://github.com/inkwall-dev/inkwall/blob/v0.2.0/docs/control-plane.md).
 
 - **Enforcement never depends on it.** Engines enforce the bundle the operator signs with the
   cluster's own key. If the connection drops, traffic is unaffected.
@@ -35,7 +35,7 @@ certificate if it isn't from a public CA, and egress from `inkwall-system` to th
 1. Give the operator the CA and the token:
 
    ```sh
-   helm upgrade --install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.1.2 \
+   helm upgrade --install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.2.0 \
      --namespace inkwall-system --create-namespace --reset-then-reuse-values \
      --set-file controlPlane.caBundle=ca.crt \
      --set controlPlane.enrollmentToken=<token>

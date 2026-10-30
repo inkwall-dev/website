@@ -7,7 +7,7 @@ order: 8
 The operator signs every policy bundle with an Ed25519 key, generated on first use and kept in the
 Secret `inkwall-bundle-signing-key` in its namespace. Engines accept a bundle only if it's signed by
 a key in the `inkwall-trust` ConfigMap of their pod's namespace (`trusted-keys.pub`). The full guide
-is [`docs/key-rotation.md`](https://github.com/inkwall-dev/inkwall/blob/v0.1.2/docs/key-rotation.md).
+is [`docs/key-rotation.md`](https://github.com/inkwall-dev/inkwall/blob/v0.2.0/docs/key-rotation.md).
 
 ## How a rotation works
 

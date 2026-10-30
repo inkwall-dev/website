@@ -5,19 +5,24 @@ order: 5
 ---
 
 `inkwallctl` is on the [releases page](https://github.com/inkwall-dev/inkwall/releases), next to the
-engine.
+engine. The full guide is
+[`docs/testing-policies.md`](https://github.com/inkwall-dev/inkwall/blob/v0.2.0/docs/testing-policies.md).
 
 ## inkwallctl test
 
 `inkwallctl test` shows the verdict and the matching rules for a request, given like a curl
 command, as raw HTTP in a file (`--request`), or as a browser HAR export (`--har`). It runs the
-engine's checks in-process with the same flags as the engine (`--paranoia-level`, `--rules`, ...),
-or against a running engine with `--engine`.
+engine's checks in-process with the same flags as the engine (`--paranoia-level`, `--rules`,
+`--disable-rule-groups`, ...), or against a running engine with `--engine`. Unlike the engine, its
+`--mode` defaults to `block`. `inkwallctl test -h` lists every flag.
 
 ```console
 $ inkwallctl test 'http://shop.example.com/?id=1%27%20OR%20%271%27%3D%271'
 deny  403  GET /?id=1%27%20OR%20%271%27%3D%271  reason=rule  rules=942100,949110  interrupting=949110  847µs
 ```
+
+Each line shows the verdict, the status, the request, why, the matched rule IDs and the time the
+check took.
 
 `--expect allow|deny` turns it into a CI check for rule changes: replay a HAR of your checkout
 flow with your exclusions, and fail the build if a legitimate request would be blocked.
@@ -29,11 +34,21 @@ inkwallctl test --rules my-exclusions.conf --expect allow --har checkout-flow.ha
 ### Test WAFPolicy objects
 
 `--policy` tests the `WAFPolicy` objects you keep in Git before they reach the cluster. With the
-rule sets, ConfigMaps and Ingresses they use, it resolves them as the operator does (each request
-goes to the policy of its host and path, and `policy=` names it) and compiles them as the engine
-does. Files or directories may hold several YAML documents, or `kubectl get -o yaml` output. Without
-`--ingress`, a single policy applies to every request. Objects the operator would reject, such as a
-missing rule set or rules that don't compile, are errors.
+rule sets (`--rule-set`), ConfigMaps (`--configmap`) and Ingresses (`--ingress`) they use, it
+resolves them as the operator does (each request goes to the policy of its host and path, and
+`policy=` names it) and compiles them as the engine does.
+
+- A file, or a directory of `.yaml`, `.yml` and `.json` files, may hold several YAML documents of
+  any of these kinds, or `kubectl get -o yaml` output. Each object is read by its kind, whichever
+  flag named the file.
+- Without `--ingress`, a single policy applies to every request; several policies need the
+  Ingresses they target. `--ingress` reads `Ingress` objects only: an `IngressRoute` is skipped,
+  with a note.
+- Objects the operator would reject, such as a missing rule set or rules that don't compile, are
+  errors.
+- Objects without a namespace go to `--namespace` (default `default`), as with `kubectl apply -n`.
+- The inspection deadline is raised to 10 s, so a slow CI runner can't turn a verdict into a
+  timeout.
 
 ```console
 $ inkwallctl test --policy wafpolicy.yaml --rule-set wafruleset.yaml --configmap configmap.yaml \
@@ -61,6 +76,9 @@ kubectl -n inkwall-system get secret inkwall-bundle -o yaml > bundle.yaml
 kubectl -n inkwall-system get secret inkwall-bundle -o jsonpath='{.data.ed25519\.pub}' > bundle.pub
 inkwallctl test --bundle bundle.yaml --bundle-key bundle.pub --har traffic.har
 ```
+
+A bundle too large for one Secret is split into chunk Secrets. `inkwallctl` then prints the
+`kubectl get secret` command that saves the bundle Secret with its chunks.
 
 ## inkwallctl bench
 

@@ -4,15 +4,16 @@ description: Install Inkwall with Helm, protect a Traefik route, and check that 
 order: 1
 ---
 
-> Inkwall v0.1.2 works with **Traefik**, and **`Ingress`** or **`IngressRoute`** routes. You need
+> Inkwall v0.2.0 works with **Traefik**, and **`Ingress`** or **`IngressRoute`** routes. You need
 > Kubernetes 1.29 or later, Helm 3, and Traefik in the cluster. The API is `v1alpha1` and will
-> change. Upgrading from 0.1.0 or 0.1.1? See [Upgrading](/docs/upgrading/).
+> change. Upgrading from 0.1.x? See [Upgrading](/docs/upgrading/).
 
 ## Install
 
 ```sh
-helm install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.1.2 \
+helm install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.2.0 \
   --namespace inkwall-system --create-namespace
+kubectl -n inkwall-system rollout status deployment/inkwall-operator
 ```
 
 Then install Traefik, or restart it if it already runs: Traefik pods started after the operator get
@@ -57,10 +58,10 @@ engine sees the [client's IP](/docs/client-ip/).
 ## Verify the release
 
 Images, the chart and the binaries' checksums are signed keyless with cosign, from the release
-workflow:
+workflow. Verify them with cosign v3 or later: cosign v2 reports `no signatures found`.
 
 ```sh
-cosign verify ghcr.io/inkwall-dev/inkwall-engine:0.1.2 \
+cosign verify ghcr.io/inkwall-dev/inkwall-engine:0.2.0 \
   --certificate-identity-regexp '^https://github.com/inkwall-dev/inkwall/\.github/workflows/release\.yaml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
@@ -84,15 +85,19 @@ Main flags (`inkwall-engine proxy -h` for all):
 |---|---|---|
 | `--mode` | `detect` | `block` to enforce |
 | `--paranoia-level` | `1` | CRS paranoia level, 1–4 |
-| `--rules` | | Your SecLang rules and exclusions, loaded after CRS |
-| `--skip-paths` | | Paths never inspected, e.g. `/healthz,/static/*` |
+| `--rules`, `--rules-before-crs` | | Your SecLang rules and exclusions, loaded after or before CRS |
+| `--skip-paths`, `--skip-body-paths` | | Paths not inspected at all, or without their body, e.g. `/healthz,/static/*` |
+| `--disable-rule-groups` | | CRS attack families the app can't be vulnerable to, e.g. `php,java` |
 | `--max-body-bytes` | `65536` | Body bytes inspected |
 | `--failure-mode` | `auto` | Uninspectable requests: closed in block mode, open in detect mode |
 | `--trusted-proxies` | | CIDRs whose `X-Forwarded-For` is trusted |
+| `--listen`, `--admin-listen` | `:8480`, `:9480` | Proxy address; address of `/metrics`, `/healthz` and `/readyz` |
 
 Each blocked or detected request logs one JSON line with the rule IDs; metrics are on
 `:9480/metrics`. The proxy accepts only origin-form request targets (`GET /path`): an absolute-form
-target (`GET http://host/path`) or an invalid `Host` gets a 400.
+target (`GET http://host/path`) or an invalid `Host` gets a 400. The guide,
+[running the engine without Kubernetes](https://github.com/inkwall-dev/inkwall/blob/v0.2.0/docs/standalone-proxy.md),
+also covers the engine's `forward-auth` and `check` modes.
 
 ## Try it locally
 

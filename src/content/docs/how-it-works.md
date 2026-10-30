@@ -1,6 +1,6 @@
 ---
 title: How it works
-description: The engine, its pipeline, what happens when inspection fails, and how proxies talk to it.
+description: The operator and the engine, what happens when inspection fails or the engine is unreachable, scale, and how proxies talk to the engine.
 order: 3
 ---
 
@@ -11,7 +11,7 @@ down, engines keep enforcing the last policy they received.
 
 ## The operator
 
-In v0.1.2, with Traefik:
+In v0.2.0, with Traefik:
 
 1. **Validates** policies and rule sets when you save them, compiling the rules with the engine's
    own Coraza version.
@@ -22,15 +22,28 @@ In v0.1.2, with Traefik:
    it would inject), so routes are never wired to an engine that isn't there.
 4. **Builds a signed bundle** of every policy, and streams it to the engines, which verify the
    signature and swap policies without a restart. The signing key can be
-   [rotated](/docs/key-rotation/) without dropping a request.
+   [rotated](/docs/key-rotation/) without dropping a request. The bundle is also kept in the
+   Secret `inkwall-bundle`; past 900 KiB compressed, it is split into chunk Secrets, up to 7.2 MiB.
 5. **Reports** each policy's status, up to `Enforced` by every engine.
 
-An engine that starts while the operator is down reads the bundle from the cluster. While a policy
+An engine that starts while the operator is down reads the bundle from the cluster. An engine that
+restarts inside a running pod enforces the bundle it cached from its first request. While a policy
 is in block mode, a Traefik pod can't start without its engine; see [Operations](/docs/operations/).
 The operator can also connect the cluster to an optional [control plane](/docs/control-plane/);
 by default it connects nowhere.
 
 ![Clients reach the proxy, which asks the inkwall-engine sidecar for a verdict before forwarding allowed requests. The operator watches policies and routes and pushes signed policy bundles to the engine.](/diagrams/system-overview.svg)
+
+## At scale
+
+The operator's scale test (`make scale-test`) runs it against fake engines on one machine. At
+5,000 policies (50,000 routes) and 500 engines, its peak memory was 518 MiB, just over the 512 MiB
+target and the chart's default limit, and a policy change reached every engine in 3.5 s (median of
+10 edits, 6.2 s at most). With 50 engines, the same policies peaked at 507 MiB. The operator
+encodes each bundle once for every engine, so its memory no longer grows with them: before 0.2.0,
+5,000 policies and 500 engines took about 2 GiB. In other runs at that size, one change in ten took
+24 to 28 s, for a reason not found yet. The measurements are in the
+[operator design](https://github.com/inkwall-dev/inkwall/blob/v0.2.0/docs/design/0004-operator.md#8-scale-targets-v1).
 
 ## The engine
 
@@ -54,6 +67,19 @@ A WAF has to decide what happens when it can't decide. Inkwall's answer depends 
 - **Detect mode** never blocks. Requests that can't be inspected are allowed and logged.
 - **Block mode** never forwards a request uninspected. A timeout, an error or overload gets a 503,
   unless you choose `failureMode: Open` for availability.
+
+The engine applies both, so they hold only while it answers. When Traefik can't reach the engine at
+all, Traefik answers itself, in every mode, and nothing reaches the app:
+
+| The engine | What Traefik's clients get |
+|---|---|
+| Crashed or restarting (connection refused) | 500 at once |
+| Hung (no answer) | 500 after 30 s, Traefik's fixed timeout |
+| Slower than the policy's `timeout` | The policy's failure mode: 503 in block mode, allowed in detect mode |
+
+Traefik's ForwardAuth has no setting to let requests through when the engine is unreachable, or to
+change that timeout ([traefik/traefik#9857](https://github.com/traefik/traefik/issues/9857)).
+[Operations](/docs/operations/) covers what keeps such an outage short.
 
 ## How proxies talk to the engine
 

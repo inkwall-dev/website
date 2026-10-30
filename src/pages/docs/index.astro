@@ -7,9 +7,11 @@ const pages = (await getCollection('docs')).sort((a, b) => a.data.order - b.data
 <Docs title="Docs" description="Inkwall documentation: getting started, upgrading, how it works, policies, operations, guides and the roadmap.">
   <h1>Documentation</h1>
   <p class="lede">
-    These pages cover Inkwall v0.1.2: Traefik with Ingress and IngressRoute routes, installed with Helm. What isn't built yet
-    is on the <a href="/docs/roadmap/">roadmap</a>. The design documents in the
-    <a href="https://github.com/inkwall-dev/inkwall/tree/v0.1.2/docs/design">main repository</a> go deeper.
+    These pages cover Inkwall v0.2.0: Traefik with Ingress and IngressRoute routes, installed with Helm. What isn't built yet
+    is on the <a href="/docs/roadmap/">roadmap</a>. The <a href="https://github.com/inkwall-dev/inkwall/blob/v0.2.0/docs/README.md">docs
+    index</a> and the design documents in the
+    <a href="https://github.com/inkwall-dev/inkwall/tree/v0.2.0/docs/design">main repository</a> go deeper, and its
+    <a href="https://github.com/inkwall-dev/inkwall/blob/v0.2.0/docs/glossary.md">glossary</a> defines Inkwall's terms.
   </p>
   <ul class="toc">
     {pages.map((p) => (
