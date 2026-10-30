@@ -1,7 +1,7 @@
 ---
 title: Policies
 description: WAFPolicy, rule sets and how Inkwall validates them before they are saved.
-order: 3
+order: 4
 ---
 
 > The API is `waf.inkwall.dev/v1alpha1` and will change. Samples:
@@ -39,7 +39,7 @@ spec:
 
 | Field | What it does |
 |---|---|
-| `targetRefs` | The routes to protect: `Ingress` objects served by Traefik. The API also accepts a Gateway API `HTTPRoute`, but the operator doesn't resolve those yet and reports `TargetUnsupported` |
+| `targetRefs` | The routes to protect: `Ingress` objects served by Traefik, and Traefik `IngressRoute` objects (`group: traefik.io`). The API also accepts a Gateway API `HTTPRoute`, but the operator doesn't resolve those yet and reports `TargetUnsupported` |
 | `mode` | `Detect` (log, let through) or `Block` (reject) |
 | `failureMode` | What happens when a request can't be inspected in time: `Closed` (503) or `Open`. Unset: closed in block mode, open in detect mode |
 | `timeout` | Inspection deadline per request, more than 0 and at most 1s |
@@ -47,6 +47,27 @@ spec:
 | `ruleSets` | The rules to run, in order; with no entry, the Core Rule Set with its defaults |
 | `exclusions` | Rule IDs to turn off, everywhere or for a path, an argument or both |
 | `body` | Whether bodies are inspected, how much of them, and what happens to larger ones |
+
+### IngressRoute targets
+
+A Traefik `IngressRoute` needs its group:
+
+```yaml
+spec:
+  targetRefs:
+  - group: traefik.io
+    kind: IngressRoute
+    name: web
+```
+
+Its hosts and paths come from its routes' `match` rules, which may combine `Host`, `Path` and
+`PathPrefix` with `&&`. A rule with anything else (`||`, `!`, other matchers) isn't accepted.
+
+### Deleting a policy
+
+The operator holds each `WAFPolicy` with the finalizer `waf.inkwall.dev/unwire` until it has removed
+its middleware from the policy's routes, keeping yours. A policy deleted while the operator is down
+waits for it, and its routes stay protected meanwhile; see [Operations](/docs/operations/).
 
 ## Rule sets
 
@@ -94,7 +115,7 @@ Each policy reports how far it got, as conditions that work with `kubectl wait` 
 | Condition | True when | Typical reasons when false |
 |---|---|---|
 | `Accepted` | The policy is valid and its references resolve | `InvalidRef`, `TargetUnsupported` |
-| `Programmed` | Traefik sends the routes to the engine | `PendingRestart` (restart Traefik to inject the engine), `SidecarMissing`, `WiringFailed` |
+| `Programmed` | Traefik sends the routes to the engine | `PendingRestart` (restart Traefik to inject the engine), `SidecarMissing`, `InjectionDisabled`, `WiringFailed` |
 | `Enforced` | Every engine runs the bundle with this policy | `EnginesBehind`, `EngineNack`, `NoEngines` |
 | `Ready` | All three | The first failing condition's reason |
 

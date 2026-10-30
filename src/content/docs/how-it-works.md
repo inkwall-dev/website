@@ -1,7 +1,7 @@
 ---
 title: How it works
 description: The engine, its pipeline, what happens when inspection fails, and how proxies talk to it.
-order: 2
+order: 3
 ---
 
 Inkwall has two parts. The **engine** sits next to each proxy and decides, for every request,
@@ -11,19 +11,24 @@ down, engines keep enforcing the last policy they received.
 
 ## The operator
 
-In v0.1.0, with Traefik:
+In v0.1.2, with Traefik:
 
 1. **Validates** policies and rule sets when you save them, compiling the rules with the engine's
    own Coraza version.
 2. **Injects** the engine into Traefik's pods as a sidecar when they are created.
-3. **Wires** each `Ingress` a policy targets: it adds a ForwardAuth middleware that sends every
-   request to the engine first, keeping your own middlewares.
+3. **Wires** each `Ingress` or `IngressRoute` a policy targets: it adds a ForwardAuth middleware
+   that sends every request to the engine first, keeping your own middlewares. It unwires them when
+   the policy is deleted, and when the engine can't be injected (injection off, or no Traefik pod
+   it would inject), so routes are never wired to an engine that isn't there.
 4. **Builds a signed bundle** of every policy, and streams it to the engines, which verify the
-   signature and swap policies without a restart.
+   signature and swap policies without a restart. The signing key can be
+   [rotated](/docs/key-rotation/) without dropping a request.
 5. **Reports** each policy's status, up to `Enforced` by every engine.
 
 An engine that starts while the operator is down reads the bundle from the cluster. While a policy
 is in block mode, a Traefik pod can't start without its engine; see [Operations](/docs/operations/).
+The operator can also connect the cluster to an optional [control plane](/docs/control-plane/);
+by default it connects nowhere.
 
 ![Clients reach the proxy, which asks the inkwall-engine sidecar for a verdict before forwarding allowed requests. The operator watches policies and routes and pushes signed policy bundles to the engine.](/diagrams/system-overview.svg)
 
@@ -55,7 +60,10 @@ A WAF has to decide what happens when it can't decide. Inkwall's answer depends 
 Each proxy uses its own native hook, so there is no extra proxy in the path.
 
 **Traefik ForwardAuth.** Traefik sends a subrequest describing the client request; the engine
-answers allow or deny before Traefik forwards anything.
+answers allow or deny before Traefik forwards anything. The middleware never trusts forwarded
+headers from the client (`trustForwardHeader: false`), forwards the body for inspection, and, on
+Traefik v3.7 or later, caps the size of the engine's answer (`maxResponseBodySize`, 64 KiB).
+Behind a load balancer, see [Client IP](/docs/client-ip/).
 
 ![Traefik sends a forward-auth subrequest to the engine for each client request, and forwards the request to the app only when the engine allows it.](/diagrams/forward-auth.svg)
 
@@ -65,9 +73,11 @@ the request, in protobuf or JSON, and returns the verdict.
 ![The caller posts a CheckRequest to /v1/check and enforces the verdict in the CheckResponse.](/diagrams/check-api.svg)
 
 **Reverse proxy.** Outside Kubernetes, or in front of a single service, the engine is the proxy:
-it inspects the request, then forwards it or answers itself.
+it inspects the request, then forwards it or answers itself. It forwards only what it inspected: a
+request with an absolute-form target (`GET http://host/path`) or an invalid `Host` gets a 400.
 
 ![The engine inspects the request, forwards allowed requests to the app, and answers denied or failed ones itself.](/diagrams/reverse-proxy.svg)
 
-Envoy and Gateway API (`ext_proc`, `ext_authz`) come next, then ingress-nginx (a Lua plugin),
-HAProxy (SPOE) and Caddy (a module); see the [roadmap](/docs/roadmap/).
+Gateway API `HTTPRoute` targets come next, with Traefik and with Envoy Gateway (`ext_proc`,
+`ext_authz`), then ingress-nginx (a Lua plugin), HAProxy (SPOE) and Caddy (a module); see the
+[roadmap](/docs/roadmap/).

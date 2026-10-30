@@ -1,7 +1,7 @@
 ---
 title: Testing rules
 description: Check verdicts and measure performance without sending real traffic.
-order: 4
+order: 5
 ---
 
 `inkwallctl` is on the [releases page](https://github.com/inkwall-dev/inkwall/releases), next to the
@@ -24,6 +24,42 @@ flow with your exclusions, and fail the build if a legitimate request would be b
 
 ```sh
 inkwallctl test --rules my-exclusions.conf --expect allow --har checkout-flow.har
+```
+
+### Test WAFPolicy objects
+
+`--policy` tests the `WAFPolicy` objects you keep in Git before they reach the cluster. With the
+rule sets, ConfigMaps and Ingresses they use, it resolves them as the operator does (each request
+goes to the policy of its host and path, and `policy=` names it) and compiles them as the engine
+does. Files or directories may hold several YAML documents, or `kubectl get -o yaml` output. Without
+`--ingress`, a single policy applies to every request. Objects the operator would reject, such as a
+missing rule set or rules that don't compile, are errors.
+
+```console
+$ inkwallctl test --policy wafpolicy.yaml --rule-set wafruleset.yaml --configmap configmap.yaml \
+    --ingress ingress.yaml --request requests.http
+allow      GET /products/42  policy=shop/storefront  580µs
+deny  403  GET /?id=1%27%20OR%20%271%27%3D%271  policy=shop/storefront  reason=rule  rules=942100,949110  interrupting=949110  623µs
+log        GET /api/orders?debug=true  policy=shop/api  reason=rule  rules=100100  interrupting=100100  20µs
+allow      GET /?id=1%27%20OR%20%271%27%3D%271  reason=no_policy  0s
+```
+
+In CI, keep attacks and legitimate traffic next to the policies. A wrong verdict exits 1, an error 2:
+
+```sh
+inkwallctl test --policy k8s/waf/ --expect deny --request test/waf/attacks.http
+inkwallctl test --policy k8s/waf/ --expect allow --har test/waf/legitimate.har
+```
+
+### Test the bundle a cluster enforces
+
+`--bundle` tests the policies the cluster runs, from its `inkwall-bundle` Secret, and `--bundle-key`
+checks the bundle's signature with the cluster's key:
+
+```sh
+kubectl -n inkwall-system get secret inkwall-bundle -o yaml > bundle.yaml
+kubectl -n inkwall-system get secret inkwall-bundle -o jsonpath='{.data.ed25519\.pub}' > bundle.pub
+inkwallctl test --bundle bundle.yaml --bundle-key bundle.pub --har traffic.har
 ```
 
 ## inkwallctl bench

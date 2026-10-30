@@ -4,13 +4,14 @@ description: Install Inkwall with Helm, protect a Traefik route, and check that 
 order: 1
 ---
 
-> Inkwall v0.1.0 works with **Traefik** and **`Ingress`** routes. You need Kubernetes 1.29 or later,
-> Helm 3, and Traefik in the cluster. The API is `v1alpha1` and will change.
+> Inkwall v0.1.2 works with **Traefik**, and **`Ingress`** or **`IngressRoute`** routes. You need
+> Kubernetes 1.29 or later, Helm 3, and Traefik in the cluster. The API is `v1alpha1` and will
+> change. Upgrading from 0.1.0 or 0.1.1? See [Upgrading](/docs/upgrading/).
 
 ## Install
 
 ```sh
-helm install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.1.0 \
+helm install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.1.2 \
   --namespace inkwall-system --create-namespace
 ```
 
@@ -23,7 +24,8 @@ kubectl -n <traefik namespace> rollout restart deployment/<traefik>
 
 ## Protect a route
 
-Attach a `WAFPolicy` to an `Ingress` that Traefik serves:
+Attach a `WAFPolicy` to an `Ingress` that Traefik serves, or to a Traefik `IngressRoute`
+(`{group: traefik.io, kind: IngressRoute, name: web}`):
 
 ```yaml
 apiVersion: waf.inkwall.dev/v1alpha1
@@ -36,7 +38,7 @@ spec:
   mode: Block   # the default, Detect, logs and never blocks
 ```
 
-The operator adds its ForwardAuth middleware to the Ingress and sends the policy to every engine.
+The operator adds its ForwardAuth middleware to the route and sends the policy to every engine.
 The policy is `Ready` once it is wired and every engine runs it:
 
 ```console
@@ -49,7 +51,8 @@ $ curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: shop.example.com' \
 ```
 
 Start in `Detect` mode, check the logs for false positives, tune them with
-[exclusions](/docs/policies/), then switch to `Block`.
+[exclusions](/docs/policies/), then switch to `Block`. Behind a cloud load balancer, make sure the
+engine sees the [client's IP](/docs/client-ip/).
 
 ## Verify the release
 
@@ -57,7 +60,7 @@ Images, the chart and the binaries' checksums are signed keyless with cosign, fr
 workflow:
 
 ```sh
-cosign verify ghcr.io/inkwall-dev/inkwall-engine:0.1.0 \
+cosign verify ghcr.io/inkwall-dev/inkwall-engine:0.1.2 \
   --certificate-identity-regexp '^https://github.com/inkwall-dev/inkwall/\.github/workflows/release\.yaml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
@@ -88,7 +91,8 @@ Main flags (`inkwall-engine proxy -h` for all):
 | `--trusted-proxies` | | CIDRs whose `X-Forwarded-For` is trusted |
 
 Each blocked or detected request logs one JSON line with the rule IDs; metrics are on
-`:9480/metrics`.
+`:9480/metrics`. The proxy accepts only origin-form request targets (`GET /path`): an absolute-form
+target (`GET http://host/path`) or an invalid `Host` gets a 400.
 
 ## Try it locally
 
