@@ -1,6 +1,6 @@
 ---
 title: Roadmap
-description: What v0.1.2 ships, and what the next milestones bring.
+description: What v0.2.0 ships, and what the next milestones bring.
 order: 11
 ---
 
@@ -21,9 +21,9 @@ its issues.
 - **Release**: images for amd64 and arm64, a Helm chart on GHCR and binaries, all signed, with SBOM
   and provenance.
 
-## v0.1.1 and v0.1.2: today
+## v0.1.1 to v0.1.3
 
-Two security releases, which also brought most of the v0.2.0 work forward
+Three security releases. 0.1.1 also brought most of the v0.2.0 work forward
 ([release post](/blog/inkwall-v0-1-2/)):
 
 - Traefik `IngressRoute` targets, not only `Ingress`.
@@ -37,22 +37,38 @@ Two security releases, which also brought most of the v0.2.0 work forward
 - The ForwardAuth middleware caps the engine's answer (`maxResponseBodySize`); guides for
   [GitOps](/docs/gitops/) and the [client IP](/docs/client-ip/) behind a load balancer.
 - Fixes for [GHSA-p4pw-j2x6-qhvj](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-p4pw-j2x6-qhvj)
-  and [GHSA-jq3g-jfmx-62m4](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-jq3g-jfmx-62m4).
+  and [GHSA-jq3g-jfmx-62m4](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-jq3g-jfmx-62m4)
+  (0.1.1, 0.1.2), and
+  [GHSA-9x6c-5v2m-835r](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-9x6c-5v2m-835r)
+  (0.1.3).
 
-## v0.2.0: hardening
+## v0.2.0: hardening, today
 
-The rest of the milestone:
+The rest of the milestone ([release post](/blog/inkwall-v0-2-0/)):
 
-- Bundles over 1 MiB, split into chunks.
-- An operator that holds up with many policies and engines.
-- A faster end-to-end CI.
-- Docs: an index, and a writing pass over the guides and design documents.
+- Bundles past 900 KiB compressed split into chunk Secrets, up to 7.2 MiB.
+- An operator that holds up with many policies and engines: each bundle encoded once for every
+  engine, and engine streams kept alive while a send waits. A scale test with fake engines measures
+  it, up to 5,000 policies and 500 engines ([How it works](/docs/how-it-works/)).
+- [What Traefik does when the engine is unreachable](/docs/operations/), measured, tested and
+  documented: a 500, in every mode.
+- A restarted engine enforces its cached bundle from its first request (the fix for
+  GHSA-9x6c-5v2m-835r, also in 0.1.3).
+- Nightly fuzzing of the request, bundle and event parsers; an upgrade test from the last release;
+  a faster end-to-end CI.
+- Docs: an index, a glossary, guides for [testing policies](/docs/testing-rules/) and the
+  standalone proxy, and a writing pass over the guides and design documents.
 
-## v0.3.0: Gateway API
+## v0.3.0: Gateway API, next
 
-Gateway API `HTTPRoute` targets, with Traefik's Gateway API provider and with Envoy Gateway
-(`ext_proc` / `ext_authz`); proxy discovery behind one integration interface; and migrating
-ingress-nginx ModSecurity annotations to `WAFPolicy`.
+- Gateway API `HTTPRoute` targets, with Traefik's Gateway API provider and with Envoy Gateway
+  (`ext_proc` / `ext_authz`).
+- Proxy discovery behind one integration interface.
+- Engine request counts and latency, sent to the optional control plane.
+- A faster operator with thousands of policies: it stops rewriting every policy's status for each
+  bundle.
+- `inkwallctl`: migrating ingress-nginx ModSecurity annotations to `WAFPolicy`, and testing
+  policies that target `IngressRoute` objects.
 
 ## v1.0.0: a stable API
 

@@ -1,6 +1,6 @@
 ---
 title: Operations
-description: What happens when the operator is down, opting a proxy out, turning injection off, deleting policies, the emergency switch and uninstalling.
+description: What happens when the operator or the engine is down, bundle size, opting a proxy out, turning injection off, deleting policies, the emergency switch and uninstalling.
 order: 6
 ---
 
@@ -26,6 +26,39 @@ kubectl -n <traefik namespace> patch deployment <traefik> --type merge \
 
 Remove the label once the operator is back.
 
+## When the engine is down
+
+The policy's mode and failure mode are applied by the engine, so they hold only while it answers.
+When Traefik can't reach the engine in its pod, Traefik answers **500** and doesn't forward the
+request, **in detect mode as in block mode**: at once when the engine has crashed or is restarting
+(connection refused), after Traefik's fixed 30 s timeout when it hangs. Traefik's ForwardAuth has no
+setting to let requests through instead.
+
+What keeps an outage short:
+
+- Traefik starts only once its engine is ready: the engine is a native sidecar with a startup
+  probe.
+- The kubelet restarts a crashed engine at once, then with a back-off, and a hung one once its
+  liveness probe fails (about 30 s). A restarted engine enforces its cached bundle from its first
+  request.
+- While the engine isn't ready, neither is Traefik's pod, so its Service sends it no new
+  connections. Run several Traefik replicas: an engine down in one pod then costs only the
+  connections that pod already has.
+
+To find an outage, `kubectl -n <traefik namespace> get pods` shows the restarts, and Traefik logs
+`Error calling http://127.0.0.1:9001/v1/forward-auth` for each request it answered 500.
+
+## Bundle size
+
+All of a cluster's policies go into one bundle, of at most 7.2 MiB compressed (and 64 MiB
+decompressed). Up to 900 KiB, it is kept in the Secret `inkwall-bundle`; past that, in chunk
+Secrets of 900 KiB, labelled `waf.inkwall.dev/bundle-chunk`. Bundles name the Core Rule Set rather
+than embed it: the operator's scale test put 5,000 policies in 134 KiB.
+
+Past 75% of the limit, the operator logs `bundle nears its size limit` when it publishes. Past the
+limit, a change isn't published and every engine keeps the current bundle; the operator logs
+`bundle not published`. The metric `inkwall_operator_bundle_compressed_bytes` shows the size.
+
 ## Traefik with other labels
 
 The operator finds Traefik's pods by `app.kubernetes.io/name=traefik`. If yours carry other labels:
@@ -50,7 +83,7 @@ operator unwires the routes (`SidecarMissing`) until one matches again.
 ## Turning injection off
 
 ```sh
-helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.1.2 \
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.2.0 \
   --namespace inkwall-system --reset-then-reuse-values --set injection.enabled=false
 ```
 
@@ -87,7 +120,8 @@ helm uninstall inkwall --namespace inkwall-system
 Before anything is deleted, the chart stops the operator, removes Inkwall's middleware from every
 `Ingress` and `IngressRoute` it wired, keeping yours, and removes the finalizer from every
 `WAFPolicy`. The routes keep working, uninspected; Traefik pods drop the engine when they restart.
-The CRDs, your `WAFPolicy` objects and the signing key Secrets are kept, so a reinstall continues
-with the same keys.
+The CRDs, your `WAFPolicy` objects and the operator's Secrets (the bundle, its chunks and the signing
+key) are kept, so a reinstall continues with the same keys. To remove the Secrets, delete the
+namespace.
 
-More in the [chart README](https://github.com/inkwall-dev/inkwall/tree/v0.1.2/deploy/helm/inkwall).
+More in the [chart README](https://github.com/inkwall-dev/inkwall/tree/v0.2.0/deploy/helm/inkwall).

@@ -12,7 +12,7 @@ const features = [
   },
   {
     title: 'Safe by default',
-    body: 'New routes start in detect mode: log, never block. In block mode nothing is forwarded uninspected; a request that can’t be inspected in time is rejected.',
+    body: 'New routes start in detect mode: log, never block. In block mode nothing is forwarded uninspected; a request that can’t be inspected in time is rejected. If Traefik can’t reach the engine at all, it answers 500 in every mode.',
   },
   {
     title: 'Policy as Kubernetes objects',
@@ -33,7 +33,7 @@ const integrations: { name: string; hook: string; state: State; note: string }[]
   { name: 'Standalone reverse proxy', hook: 'HTTP', state: 'works', note: 'In front of any HTTP service, in or out of Kubernetes' },
   { name: 'Traefik', hook: 'ForwardAuth', state: 'works', note: 'The operator injects the engine and wires Ingress and IngressRoute routes' },
   { name: 'Any proxy with a hook', hook: 'POST /v1/check', state: 'works', note: 'The engine’s own API, protobuf or JSON' },
-  { name: 'Kubernetes operator', hook: 'CRDs', state: 'works', note: 'Validation, signed bundles with key rotation, injection, wiring and status; Helm chart on GHCR' },
+  { name: 'Kubernetes operator', hook: 'CRDs', state: 'works', note: 'Validation, signed bundles with key rotation, injection, wiring and status; scale-tested with 5,000 policies and 500 fake engines; Helm chart on GHCR' },
   { name: 'Traefik (Gateway API)', hook: 'ForwardAuth', state: 'progress', note: 'HTTPRoute targets. Next: milestone v0.3.0' },
   { name: 'Envoy Gateway (Gateway API)', hook: 'ext_proc / ext_authz', state: 'progress', note: 'HTTPRoute targets. Next: milestone v0.3.0' },
   { name: 'Envoy, Istio', hook: 'ext_proc / ext_authz', state: 'planned', note: '' },
@@ -49,7 +49,7 @@ const label: Record<State, string> = { works: 'Works today', progress: 'Next', p
 >
   <section class="hero">
     <div class="container">
-      <p class="status"><span class="dot" aria-hidden="true"></span> v0.1.2 is out: Traefik with Ingress and IngressRoute routes, installed with Helm</p>
+      <p class="status"><span class="dot" aria-hidden="true"></span> v0.2.0 is out: Traefik with Ingress and IngressRoute routes, installed with Helm</p>
       <h1>One web application firewall for every ingress in your cluster</h1>
       <p class="sub">
         Inkwall protects HTTP traffic behind any proxy with the same policy. Write a <code>WAFPolicy</code>,
@@ -141,7 +141,7 @@ const label: Record<State, string> = { works: 'Works today', progress: 'Next', p
       </div>
       <pre><code>$ helm install inkwall \
     oci://ghcr.io/inkwall-dev/charts/inkwall \
-    --version 0.1.2 \
+    --version 0.2.0 \
     -n inkwall-system --create-namespace
 $ kubectl get wafpolicy -n shop
 NAME   MODE    READY   BUNDLE   AGE
