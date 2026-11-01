@@ -6,9 +6,9 @@ order: 10
 
 A cluster can connect to an optional control plane, a separate service that sees many clusters in
 one place. This repository holds only the cluster side: the operator's client and the protocol,
-[`api/controlplane/v1`](https://github.com/inkwall-dev/inkwall/blob/v0.2.0/api/controlplane/v1/controlplane.proto).
+[`api/controlplane/v1`](https://github.com/inkwall-dev/inkwall/blob/v0.3.0/api/controlplane/v1/controlplane.proto).
 The full guide is
-[`docs/control-plane.md`](https://github.com/inkwall-dev/inkwall/blob/v0.2.0/docs/control-plane.md).
+[`docs/control-plane.md`](https://github.com/inkwall-dev/inkwall/blob/v0.3.0/docs/control-plane.md).
 
 - **Enforcement never depends on it.** Engines enforce the bundle the operator signs with the
   cluster's own key. If the connection drops, traffic is unaffected.
@@ -35,7 +35,7 @@ certificate if it isn't from a public CA, and egress from `inkwall-system` to th
 1. Give the operator the CA and the token:
 
    ```sh
-   helm upgrade --install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.2.0 \
+   helm upgrade --install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.3.0 \
      --namespace inkwall-system --create-namespace --reset-then-reuse-values \
      --set-file controlPlane.caBundle=ca.crt \
      --set controlPlane.enrollmentToken=<token>
@@ -94,6 +94,11 @@ used without a restart.
   logs. The engine redacts each event before it leaves the pod: method, host, path without the query
   string, client IP, user agent, status, matched rule IDs with at most 64 bytes of each matched
   value, the policy and the action.
+- **Request counts**, only if the control plane asks for them: per policy, how many requests the
+  engines allowed, denied and detected, and how long inspecting them took (a histogram from 50 µs
+  to about 0.8 s). Each replica sums its engines' counts and sends them every 10 seconds, for the
+  policies whose counts changed. No routes, paths, hosts or client addresses, and requests no
+  policy covers aren't counted.
 
 It never sends Secrets, ConfigMap contents, request bodies, query strings, `Authorization` headers
 or cookies.
@@ -102,6 +107,11 @@ While the control plane is unreachable, each operator replica buffers events on 
 `emptyDir` of `controlPlane.eventsBufferMiB` (64 MiB by default), drops the oldest when it's full,
 and resends what wasn't acknowledged once it reconnects. The metric
 `inkwall_operator_events_buffered` shows the buffer.
+
+Request counts need no buffer: each replica keeps its running totals in memory, for at least 4,096
+policies, and sends them all again after reconnecting. A replica that restarts starts again from
+zero, so a policy's total can go down; a decrease counts as a reset. Counts dropped on the way are
+counted in `inkwall_operator_request_stats_dropped_total{reason}`.
 
 ## Managed mode
 

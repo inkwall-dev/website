@@ -1,6 +1,6 @@
 ---
 title: How it works
-description: The operator and the engine, what happens when inspection fails or the engine is unreachable, scale, and how proxies talk to the engine.
+description: The operator and the engine, what happens when inspection fails or the engine is unreachable, scale, and how Traefik and Envoy Gateway talk to the engine.
 order: 3
 ---
 
@@ -11,43 +11,62 @@ down, engines keep enforcing the last policy they received.
 
 ## The operator
 
-In v0.2.0, with Traefik:
+In v0.3.0, with Traefik and Envoy Gateway:
 
 1. **Validates** policies and rule sets when you save them, compiling the rules with the engine's
    own Coraza version.
-2. **Injects** the engine into Traefik's pods as a sidecar when they are created.
-3. **Wires** each `Ingress` or `IngressRoute` a policy targets: it adds a ForwardAuth middleware
-   that sends every request to the engine first, keeping your own middlewares. It unwires them when
-   the policy is deleted, and when the engine can't be injected (injection off, or no Traefik pod
-   it would inject), so routes are never wired to an engine that isn't there.
-4. **Builds a signed bundle** of every policy, and streams it to the engines, which verify the
+2. **Discovers** the proxies: the `InkwallConfig` named `default`, if you create one, lists in
+   `status.proxies` the proxy controllers of the cluster's IngressClasses and GatewayClasses, and
+   whether Inkwall wires their routes (`Full`, `Partial` or `Unsupported`).
+3. **Injects** the engine as a sidecar: into Traefik's pods when they are created, and into Envoy
+   Gateway's Envoy pods through the Gateway's `EnvoyProxy`, so Envoy Gateway rolls them itself.
+   Only pods in the [proxy namespaces](/docs/operations/) get it.
+4. **Wires** each route a policy targets. With Traefik, an `Ingress`, an `IngressRoute` or an
+   `HTTPRoute` gets a ForwardAuth middleware that sends every request to the engine first, keeping
+   your own middlewares (for an `HTTPRoute`, through an `ExtensionRef` filter). With Envoy Gateway,
+   each `HTTPRoute` gets an `EnvoyExtensionPolicy` whose ext_proc filter calls the engine on a
+   Unix socket. It unwires them when the policy is deleted, and when the engine can't be injected
+   (injection off, or no proxy pod it would inject), so routes are never wired to an engine that
+   isn't there.
+5. **Builds a signed bundle** of every policy, and streams it to the engines, which verify the
    signature and swap policies without a restart. The signing key can be
    [rotated](/docs/key-rotation/) without dropping a request. The bundle is also kept in the
    Secret `inkwall-bundle`; past 900 KiB compressed, it is split into chunk Secrets, up to 7.2 MiB.
-5. **Reports** each policy's status, up to `Enforced` by every engine.
+6. **Reports** each policy's status, up to `Enforced` by every engine. A policy's status is written
+   only when it changes, so a proxy rollout doesn't rewrite every policy.
+
+Each proxy's wiring sits behind one integration interface, with a `ClusterRole` of its own. If the
+operator lacks some of an integration's permissions, it disables that integration instead of
+stalling the others; see [Operations](/docs/operations/).
 
 An engine that starts while the operator is down reads the bundle from the cluster. An engine that
 restarts inside a running pod enforces the bundle it cached from its first request. While a policy
 is in block mode, a Traefik pod can't start without its engine; see [Operations](/docs/operations/).
-The operator can also connect the cluster to an optional [control plane](/docs/control-plane/);
-by default it connects nowhere.
+Envoy Gateway's Envoy pods don't depend on the operator to start: their engine comes from the
+`EnvoyProxy`. The operator can also connect the cluster to an optional
+[control plane](/docs/control-plane/); by default it connects nowhere.
 
 ![Clients reach the proxy, which asks the inkwall-engine sidecar for a verdict before forwarding allowed requests. The operator watches policies and routes and pushes signed policy bundles to the engine.](/diagrams/system-overview.svg)
 
 ## At scale
 
-The operator's scale test (`make scale-test`) runs it against fake engines on one machine. At
-5,000 policies (50,000 routes) and 500 engines, its peak memory was 518 MiB, just over the 512 MiB
-target and the chart's default limit, and a policy change reached every engine in 3.5 s (median of
-10 edits, 6.2 s at most). With 50 engines, the same policies peaked at 507 MiB. The operator
-encodes each bundle once for every engine, so its memory no longer grows with them: before 0.2.0,
-5,000 policies and 500 engines took about 2 GiB. In other runs at that size, one change in ten took
-24 to 28 s, for a reason not found yet. The measurements are in the
-[operator design](https://github.com/inkwall-dev/inkwall/blob/v0.2.0/docs/design/0004-operator.md#8-scale-targets-v1).
+The operator's scale test (`make scale-test`) runs it against fake engines on one machine, at up to
+5,000 policies (50,000 routes) and 500 engines. The operator encodes each bundle once for every
+engine, so its memory doesn't grow with them: before 0.2.0, 5,000 policies and 500 engines took
+about 2 GiB.
+
+In 0.3.0, a bundle writes the status of only the policies it changes, and `Enforced` is written
+only when it changes, up to 8 at a time. At 5,000 policies and 500 engines, a bundle reconcile went
+from 12 s to 0.4 s, and the slowest of 10 policy changes reached every engine in 3.9 to 4.6 s. The operator
+also sets `GOMEMLIMIT` to 90% of its container's memory limit and no longer makes the allocations
+that raised its peak: over 5 runs at that size, its median peak memory went from 472 to 409 MiB,
+under the chart's default 512 MiB limit. The measurements are in the
+[operator design](https://github.com/inkwall-dev/inkwall/blob/v0.3.0/docs/design/0004-operator.md#8-scale-targets-v1).
 
 ## The engine
 
-Every proxy integration feeds the same pipeline. Cheap checks run first, so most requests never
+Every proxy integration (forward-auth for Traefik, ext_proc for Envoy Gateway, the check API, the
+reverse proxy) feeds the same pipeline. Cheap checks run first, so most requests never
 reach a regular expression: paths you skip are not inspected, oversized bodies are handled by
 policy, and a bounded number of requests are inspected at once, so overload is answered at once
 instead of queueing. The rules are the OWASP Core Rule Set, run by OWASP Coraza.
@@ -56,7 +75,9 @@ instead of queueing. The rules are the OWASP Core Rule Set, run by OWASP Coraza.
 
 Inspection currently costs about 0.5 ms per request plus roughly 0.15 ms per request argument.
 Benchmarks run against the base branch on every pull request, and a significant regression fails
-the build.
+the build. Engines also count, per policy, the requests they allow, deny and detect, with a latency
+histogram; the operator sends the totals to a connected [control plane](/docs/control-plane/), and
+nowhere in `Standalone` mode.
 
 ## When inspection fails
 
@@ -81,6 +102,12 @@ Traefik's ForwardAuth has no setting to let requests through when the engine is 
 change that timeout ([traefik/traefik#9857](https://github.com/traefik/traefik/issues/9857)).
 [Operations](/docs/operations/) covers what keeps such an outage short.
 
+Through Envoy Gateway, Envoy answers 500 too when it can't reach the engine, unless every policy on
+the route fails open (`failureMode: Open`, or detect mode without one): then it lets the request
+through uninspected. When those policies are all in detect mode, Envoy doesn't wait for the engine
+at all: it sends it a copy of the request (ext_proc's observability mode) and forwards it, so a slow
+or hung engine delays nothing.
+
 ## How proxies talk to the engine
 
 Each proxy uses its own native hook, so there is no extra proxy in the path.
@@ -93,6 +120,14 @@ Behind a load balancer, see [Client IP](/docs/client-ip/).
 
 ![Traefik sends a forward-auth subrequest to the engine for each client request, and forwards the request to the app only when the engine allows it.](/diagrams/forward-auth.svg)
 
+**Envoy Gateway ext_proc.** Envoy calls the engine (`inkwall-engine ext-proc`) over gRPC on a
+Unix socket the two containers share, with Envoy's
+[external processing](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_proc_filter)
+protocol. Envoy holds the request until the engine answers, with its body on routes whose policy
+inspects bodies; an allowed request continues, a denied one gets the engine's answer (403, 413,
+503...). Envoy waits 500 ms longer than the policy's `timeout`, for a hung engine. The engine
+sees the request's real protocol (HTTP/1.1, HTTP/2, HTTP/3).
+
 **The check API.** For proxies without a native protocol, `POST /v1/check` takes a description of
 the request, in protobuf or JSON, and returns the verdict.
 
@@ -104,6 +139,5 @@ request with an absolute-form target (`GET http://host/path`) or an invalid `Hos
 
 ![The engine inspects the request, forwards allowed requests to the app, and answers denied or failed ones itself.](/diagrams/reverse-proxy.svg)
 
-Gateway API `HTTPRoute` targets come next, with Traefik and with Envoy Gateway (`ext_proc`,
-`ext_authz`), then ingress-nginx (a Lua plugin), HAProxy (SPOE) and Caddy (a module); see the
-[roadmap](/docs/roadmap/).
+Raw Envoy and Istio (`ext_proc`, `ext_authz`), ingress-nginx (a Lua plugin), HAProxy (SPOE) and
+Caddy (a module) are designed, not built yet; see the [roadmap](/docs/roadmap/).

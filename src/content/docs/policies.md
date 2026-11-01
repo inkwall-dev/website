@@ -39,7 +39,7 @@ spec:
 
 | Field | What it does |
 |---|---|
-| `targetRefs` | The routes to protect: `Ingress` objects served by Traefik, and Traefik `IngressRoute` objects (`group: traefik.io`). The API also accepts a Gateway API `HTTPRoute`, but the operator doesn't resolve those yet and reports `TargetUnsupported` |
+| `targetRefs` | The routes to protect: `Ingress` objects served by Traefik, Traefik `IngressRoute` objects (`group: traefik.io`), and Gateway API `HTTPRoute` objects (`group: gateway.networking.k8s.io`) served by Traefik or Envoy Gateway, optionally one rule (`sectionName`) |
 | `mode` | `Detect` (log, let through) or `Block` (reject) |
 | `failureMode` | What happens when a request can't be inspected in time: `Closed` (503) or `Open`. Unset: closed in block mode, open in detect mode |
 | `timeout` | Inspection deadline per request, more than 0 and at most 1s |
@@ -63,10 +63,39 @@ spec:
 Its hosts and paths come from its routes' `match` rules, which may combine `Host`, `Path` and
 `PathPrefix` with `&&`. A rule with anything else (`||`, `!`, other matchers) isn't accepted.
 
+### HTTPRoute targets
+
+A Gateway API `HTTPRoute`, served by Envoy Gateway or by Traefik's Gateway API provider, needs its
+group, and may name one of its rules with `sectionName`:
+
+```yaml
+spec:
+  targetRefs:
+  - {group: gateway.networking.k8s.io, kind: HTTPRoute, name: web}
+  - {group: gateway.networking.k8s.io, kind: HTTPRoute, name: api, sectionName: orders}
+```
+
+Its routes are its `hostnames` × each rule's `matches`: `Exact` and `PathPrefix` paths, and
+methods. A `RegularExpression` path, or `headers` or `queryParams` matches, aren't accepted
+(`TargetUnsupported`). A wildcard hostname (`*.example.com`) covers subdomains at any depth, as the
+Gateway API defines; an `Ingress` wildcard covers one label. When two targets give the same host,
+path and methods, the most specific wins: a rule (`sectionName`), then a whole `HTTPRoute`, then an
+`Ingress` or an `IngressRoute`.
+
+One policy can target routes of both proxies. Traefik wires an HTTPRoute only when every Gateway it
+is attached to is Traefik's, so a route also attached to another proxy's Gateway is `WiringFailed`:
+give each proxy its own HTTPRoute. An HTTPRoute of another Gateway API controller is resolved into
+the bundle, but not wired (`ControllerUnsupported`). The proxy needs the Gateway API:
+
+- **Traefik:** install the Gateway API CRDs and turn on its Gateway API provider
+  (`providers.kubernetesGateway.enabled=true` in its chart).
+- **Envoy Gateway** (v1.9; not with `mergeGateways`, nor Envoy as a DaemonSet): turn on its Backend
+  API (`config.envoyGateway.extensionApis.enableBackend=true` in its chart).
+
 ### Deleting a policy
 
-The operator holds each `WAFPolicy` with the finalizer `waf.inkwall.dev/unwire` until it has removed
-its middleware from the policy's routes, keeping yours. A policy deleted while the operator is down
+The operator holds each `WAFPolicy` with the finalizer `waf.inkwall.dev/unwire` until it has
+unwired the policy's routes, keeping your own middlewares. A policy deleted while the operator is down
 waits for it, and its routes stay protected meanwhile; see [Operations](/docs/operations/).
 
 ## Rule sets
@@ -114,10 +143,17 @@ Each policy reports how far it got, as conditions that work with `kubectl wait` 
 
 | Condition | True when | Typical reasons when false |
 |---|---|---|
-| `Accepted` | The policy is valid and its references resolve | `InvalidRef`, `TargetUnsupported` |
-| `Programmed` | Traefik sends the routes to the engine | `PendingRestart` (restart Traefik to inject the engine), `SidecarMissing`, `InjectionDisabled`, `WiringFailed` |
-| `Enforced` | Every engine runs the bundle with this policy | `EnginesBehind`, `EngineNack`, `NoEngines` |
+| `Accepted` | The policy is valid and its references resolve | `InvalidRef`, `Conflict`, `TargetUnsupported` |
+| `Programmed` | The proxy of every target sends its routes to the engine | `PendingRestart` (restart Traefik to inject the engine), `SidecarMissing`, `InjectionDisabled`, `IntegrationDisabled`, `ControllerUnsupported`, `WiringFailed`, `Unwired` (after `helm uninstall`) |
+| `Enforced` | Every engine runs a bundle with this policy as it is | `EnginesBehind`, `EngineNack`, `EnginesUnreported`, `NoEngines` |
 | `Ready` | All three | The first failing condition's reason |
+
+`status.bundleVersion` is the first bundle that enforces the policy as it is now; a bundle that
+changes only other policies leaves it, so the `BUNDLE` column differs between policies. The
+`Enforced` messages don't count engines (`every engine runs bundle 42 or later`,
+`some engines don't run bundle 42 yet`, `some engines rejected bundle 42 (first: ns/pod: error)`),
+so a proxy rollout doesn't rewrite every policy's status; `inkwall_operator_engines{state}` has the
+counts.
 
 ```console
 $ kubectl get wafpolicy -A

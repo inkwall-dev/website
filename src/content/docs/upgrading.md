@@ -1,35 +1,72 @@
 ---
 title: Upgrading
-description: Upgrade from 0.1.x to 0.2.0, what changes by itself, and how to roll back.
+description: Upgrade from 0.2.x to 0.3.0, what to check first, what changes by itself, protecting HTTPRoutes, and how to roll back.
 order: 2
 ---
 
-Upgrade to **0.2.0** from any 0.1 release. 0.2.0 and 0.1.3 fix a security issue in 0.1.0 to 0.1.2,
-[GHSA-9x6c-5v2m-835r](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-9x6c-5v2m-835r).
-You need the values you installed the chart with, and Helm 3.14 or later for
-`--reset-then-reuse-values`. The full guide is
-[`docs/upgrading.md`](https://github.com/inkwall-dev/inkwall/blob/v0.2.0/docs/upgrading.md).
+Upgrade to **0.3.0** from any 0.2 release. From 0.1.x, upgrade to 0.2.2 first, then to 0.3.0. 0.3.0
+includes every security fix since 0.2.0:
+[GHSA-r78f-635q-r8w2](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-r78f-635q-r8w2)
+(fixed in 0.2.1 and 0.1.4) and
+[GHSA-r5cq-6vq5-q8qg](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-r5cq-6vq5-q8qg)
+(fixed in 0.2.2 and 0.1.5). You need the values you installed the chart with, and Helm 3.14 or later
+for `--reset-then-reuse-values`. The full guide is
+[`docs/upgrading.md`](https://github.com/inkwall-dev/inkwall/blob/v0.3.0/docs/upgrading.md).
+
+## Before you upgrade
+
+- **Check the policies that target an `HTTPRoute`.** 0.2.x accepted such targets but never
+  enforced them: those policies were `Accepted=False` (`TargetUnsupported`). From 0.3.0, every
+  `HTTPRoute` they target that Traefik or Envoy Gateway serves is wired and inspected, in the
+  policy's mode. List them, and set `mode: Detect` on any you aren't sure of:
+
+  ```sh
+  kubectl get wafpolicy -A -o json |
+    jq -r '.items[] | select(any(.spec.targetRefs[]; .kind == "HTTPRoute")) | "\(.metadata.namespace)/\(.metadata.name) \(.spec.mode // "Block")"'
+  ```
+
+- **List your proxy's namespace, if it isn't a default one.** From 0.2.0 or 0.2.1, the upgrade adds
+  `injection.proxyNamespaces` (0.2.2 already has it): only proxy pods in those namespaces get the
+  engine and read access to the policy bundle. The default is `traefik`, `kube-system` and
+  `envoy-gateway-system`. If your proxy runs elsewhere, add its namespace in step 1 below. While
+  pods that run the engine are in a namespace the value doesn't list, `helm upgrade` stops with
+  `pods with the Inkwall engine run in namespace(s) …, which injection.proxyNamespaces doesn't list`
+  and changes nothing. Helm checks this only when it reaches the cluster: with `helm template` or
+  Argo CD, list the namespaces yourself. See [Operations](/docs/operations/).
+- **Remove `spec.engine.socketDir` from your `InkwallConfig`**, if you set it. It never had an
+  effect, and is now deprecated: setting or changing it draws a warning. An `InkwallConfig` that
+  has it keeps working.
+- **Check how the chart grants the integrations' permissions.** Each integration now has a
+  `ClusterRole` of its own, `inkwall-operator-traefik` and `inkwall-operator-envoy-gateway`, chosen
+  by the new values `rbac.integrations.traefik` and `rbac.integrations.envoyGateway`. The default,
+  `true` (also with `--reuse-values`, which has no such values), grants both, so a proxy installed
+  after Inkwall is protected. With `auto`, a role is granted only if the proxy's CRDs are installed
+  when you run `helm upgrade`: run it again once a proxy is installed, or its integration stays
+  disabled (`IntegrationDisabled`). With Argo CD or Flux, keep both values `true` or `false` in Git
+  ([GitOps](/docs/gitops/)).
+- **Update what parses the `Enforced` condition's message** (alerts, scripts): see
+  [below](#what-changes-by-itself).
 
 ## Upgrade
 
 1. Upgrade the chart, with the values you installed it with:
 
    ```sh
-   helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.2.0 \
+   helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.3.0 \
      --namespace inkwall-system --reset-then-reuse-values
    ```
 
+   If your proxy runs outside the default proxy namespaces, add them, with the defaults you still
+   need: `--set 'injection.proxyNamespaces={ingress,envoy-gateway-system}'`.
+
    `--reset-then-reuse-values` takes the new chart's defaults, then your values. Passing your values
-   file again (`-f values.yaml`) works too. Prefer either to `--reuse-values`, which keeps the old
-   values without the new defaults. 0.2.0 adds no chart values, and since 0.1.2 the chart defaults
-   the `controlPlane` values that made `--reuse-values` fail from 0.1.0
-   (`nil pointer evaluating interface {}.caBundle`), so it renders too.
+   file again (`-f values.yaml`) works too.
 
    The chart upgrades the CRDs with it (`crds.install`, on by default). If you install the CRDs
    yourself, apply the new ones first:
 
    ```sh
-   helm template inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.2.0 \
+   helm template inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.3.0 \
      --show-only templates/crds.yaml | kubectl apply --server-side -f -
    ```
 
@@ -39,105 +76,138 @@ You need the values you installed the chart with, and Helm 3.14 or later for
    kubectl -n inkwall-system rollout status deployment/inkwall-operator
    ```
 
-3. Restart Traefik, so its pods get the new engine:
+3. Restart Traefik, so its pods run the 0.3.0 engine:
 
    ```sh
    kubectl -n <traefik namespace> rollout restart deployment/<traefik>
    ```
 
-   The security fix is in the engine: it applies once Traefik's pods have restarted.
-
 If Argo CD or Flux installs the chart, change the chart version in Git instead; see
 [GitOps](/docs/gitops/).
 
-## What changes by itself, from 0.1.1, 0.1.2 or 0.1.3
+## What's new
 
-The CRDs and the chart's values don't change. Without any configuration, the upgrade:
+The upgrade adds no new kinds, and no chart values besides `rbac.integrations` (and
+`injection.proxyNamespaces` from 0.2.0 or 0.2.1).
 
-- **Splits large bundles into chunk Secrets.** A bundle of up to 900 KiB compressed stays in the
-  Secret `inkwall-bundle`, as before. A larger one is split into Secrets of 900 KiB
-  (`inkwall-bundle-a-0`, ... or `inkwall-bundle-b-0`, ..., labelled `waf.inkwall.dev/bundle-chunk`),
-  at most 8 of them: 7.2 MiB compressed. The operator lets the engines read the chunks (the Role
-  `inkwall-bundle-reader`). Policies past that limit aren't published, and the current bundle
-  stays.
-- **Holds less memory with many engines.** The operator encodes each bundle once for every engine,
-  and keeps reading an engine's heartbeats while a send to it waits, so engines aren't disconnected
-  when many get a bundle at once.
-- **Starts engines with their cached bundle.** A restarted engine applies the bundle it already has
-  before it answers Traefik. While it loads, Traefik answers 500; before, the engine allowed
-  requests uninspected for about 0.1 s
-  ([GHSA-9x6c-5v2m-835r](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-9x6c-5v2m-835r)).
+- **`HTTPRoute` targets are wired**: through Traefik's Gateway API provider (an `ExtensionRef`
+  filter to the `inkwall-waf` Middleware), or through Envoy Gateway (an `EnvoyExtensionPolicy`
+  calling the engine over ext_proc). `sectionName` protects one named rule of a route.
+- **`InkwallConfig.status.proxies`** lists the proxy controllers of the cluster's IngressClasses and
+  GatewayClasses, and how far Inkwall wires their routes: `Full`, `Partial` or `Unsupported`. It is
+  written into an existing `InkwallConfig` named `default` only.
+- **A webhook for `InkwallConfig`**, with `failurePolicy: Ignore`: it only warns.
+- **Integrations checked at start and every minute.** An integration whose permissions the operator
+  lacks is disabled instead of stalling the others: policies on its proxy's routes are
+  `Programmed=False` (`IntegrationDisabled`), and the proxy is `Unsupported` in `status.proxies`.
+- **`GOMEMLIMIT`.** The operator sets it to 90% of its container's memory limit
+  (`operator.resources.limits.memory`, 512Mi by default), unless `GOMEMLIMIT` is set.
+- **New metrics**: `inkwall_operator_wired_targets{integration}`,
+  `inkwall_operator_wiring_failures{integration}`, `inkwall_operator_engines_left_out`,
+  `inkwall_operator_request_stats_dropped_total{reason}` and
+  `inkwall_operator_state_engines_left_out`.
+- **`inkwall-engine ext-proc`**, Envoy's external processing over gRPC; **`inkwallctl migrate
+  ingress-nginx`** ([Migrating from ingress-nginx](/docs/migrating-from-ingress-nginx/)); and
+  `inkwallctl test --ingress` reads `IngressRoute` and `HTTPRoute` objects, strictly
+  ([Testing rules](/docs/testing-rules/)).
 
-Traefik pods keep their old engine until they restart. It keeps working with the new operator,
-except that an engine from 0.1.x can't read a bundle split into chunks, and refuses a bundle over
-4 MiB decompressed: it keeps the bundle it has. Restart Traefik after the upgrade.
+## What changes by itself
 
-## From 0.1.0
+- **`HTTPRoute` targets are enforced**, as [above](#before-you-upgrade).
+- **The `Enforced` condition's messages no longer count engines.** `every engine runs bundle 42 or
+  later`, `some engines don't run bundle 42 yet` and `some engines rejected bundle 42 (first:
+  shop/traefik-abc: error)`, instead of `5/6 engines on bundle 42` and `1/6 engines rejected bundle
+  42`. So a proxy rollout no longer rewrites every policy's status; `inkwall_operator_engines{state}`
+  has the counts. A new reason, `EnginesUnreported`, says a replica's engine report left engines
+  out.
+- **A policy's status is written only when it changes.** `status.bundleVersion` is now the first
+  bundle that enforces the policy as it is, not the newest bundle, so the `BUNDLE` column of
+  `kubectl get wafpolicy` differs between policies. Policies upgraded from 0.2.x keep their version
+  until their next change.
+- **`Programmed=False` after uninstall.** The `helm uninstall` hook sets `Programmed=False` and
+  `Ready=False`, reason `Unwired`, on every policy whose routes it unwired.
+- **Request counts.** Engines count, per policy, the requests they allow, deny and detect, with
+  their latency; the operator sends the totals to a connected [control plane](/docs/control-plane/).
+  `Standalone`, the default, sends nothing.
+- **Limits on what an engine sends.** The operator refuses an engine whose `Hello` or heartbeat
+  carries oversized fields, keeps the first 1,000 security events of a message and counts the rest
+  as dropped, and cuts a rejection's error to 1 KiB.
+- **Less of the cluster in the operator's cache**: one informer per integration selector, so custom
+  `InkwallConfig` selectors no longer make it cache every pod.
+- **Your `ClientTrafficPolicy` wins.** When you add one for a Gateway that has the operator's
+  (`inkwall-waf-<gateway>`), the operator deletes its own.
 
-The upgrade from 0.1.0 also brings what 0.1.1 changed. The CRDs get new fields, and no new kinds,
-and the upgrade:
+Traefik's pods keep their 0.2.x engine until they restart. It keeps enforcing its rules, but sends
+no request counts, and matches an `HTTPRoute`'s wildcard hostname against a single DNS label only.
+Envoy Gateway's pods need no restart: 0.2.x never put an engine in them, and Envoy Gateway rolls
+them itself when the operator changes their `EnvoyProxy`. An engine image set in
+`InkwallConfig.spec.engine.image` stays as it is: change it to 0.3.0 yourself.
 
-- **Adds a finalizer to every `WAFPolicy`**, `waf.inkwall.dev/unwire`: a deleted policy waits until
-  the operator has unwired its routes. With Argo CD or Flux, read [GitOps](/docs/gitops/).
-- **Unwires routes when the engine can't be injected**: with `injection.enabled=false`, or when no
-  running pod matches Traefik's selector, the operator removes its middleware from every route it
-  wired and reports `Programmed=False` (`InjectionDisabled` or `SidecarMissing`). The routes keep
-  working, uninspected. 0.1.0 left them wired.
-- **Publishes the signing key in a new format**: `trusted-keys.pub`, the list of keys engines accept,
-  next to `ed25519.pub`. The key doesn't change.
-- **Adds an events buffer** to each operator pod, an `emptyDir` of `controlPlane.eventsBufferMiB`
-  (64 MiB by default) + 16 MiB. It stays empty unless you connect a
-  [control plane](/docs/control-plane/).
+## Protecting HTTPRoutes
 
-Nothing connects anywhere: the default mode, `Standalone`, never does. On Traefik v3.7 or later,
-the ForwardAuth middleware also gets `maxResponseBodySize`. Until its pod restarts, a 0.1.0 engine
-also holds up any [signing key rotation](/docs/key-rotation/).
+- **Traefik:** install the Gateway API CRDs (the
+  [standard channel](https://gateway-api.sigs.k8s.io/guides/getting-started/#installing-gateway-api))
+  and turn on Traefik's Gateway API provider (`providers.kubernetesGateway.enabled=true` in its
+  chart). The operator wires the HTTPRoutes whose parent Gateway has a GatewayClass of controller
+  `traefik.io/gateway-controller`.
+- **Envoy Gateway** (v1.9; not with `mergeGateways`, nor Envoy as a DaemonSet): turn on its Backend
+  API with `--set config.envoyGateway.extensionApis.enableBackend=true` on its chart, as in
+  [Getting started](/docs/getting-started/).
+
+The operator looks for these CRDs every 30 s, so they can be installed before or after the
+upgrade. The Gateway API's v1.7 CRDs need Kubernetes 1.31 or later. Then target the routes:
+
+```yaml
+spec:
+  targetRefs:
+    - {group: gateway.networking.k8s.io, kind: HTTPRoute, name: web}
+    - {group: gateway.networking.k8s.io, kind: HTTPRoute, name: api, sectionName: orders}
+```
+
+A route of another Gateway API controller is resolved into the bundle, but not wired: the policy
+is `Programmed=False` (`ControllerUnsupported`).
 
 ## Check it worked
 
 ```sh
 helm -n inkwall-system list
 kubectl get wafpolicy -A
+kubectl get inkwallconfig default -o jsonpath='{range .status.proxies[*]}{.controllerName} {.support}{"\n"}{end}'
 kubectl -n <traefik namespace> get pods -l app.kubernetes.io/name=traefik \
   -o jsonpath='{range .items[*]}{.metadata.name} {.spec.initContainers[?(@.name=="inkwall-engine")].image}{"\n"}{end}'
 ```
 
-The chart shows 0.2.0, the policies are `Ready`, and Traefik's pods run
-`ghcr.io/inkwall-dev/inkwall-engine:0.2.0`.
+The chart shows 0.3.0, the policies are `Ready`, the proxies you run are `Full`, and Traefik's pods
+run `ghcr.io/inkwall-dev/inkwall-engine:0.3.0`.
 
 ## Roll back
 
-Before `helm rollback` to 0.1.x, check that the bundle isn't split into chunks:
+0.2.x neither wires nor unwires HTTPRoutes. Before `helm rollback`, unprotect them: remove the
+`HTTPRoute` entries from every policy's `targetRefs`, or delete those policies. The operator then
+removes its filters from the HTTPRoutes, takes the engine out of the `EnvoyProxy` objects and
+deletes its Envoy Gateway objects. Wait until the first command prints nothing and the second finds
+no resources:
 
 ```sh
-kubectl -n inkwall-system get secret -l waf.inkwall.dev/bundle-chunk
+kubectl get httproutes.gateway.networking.k8s.io,gateways.gateway.networking.k8s.io,envoyproxies.gateway.envoyproxy.io -A \
+  -o jsonpath='{range .items[?(@.metadata.annotations.waf\.inkwall\.dev/wired)]}{.kind} {.metadata.namespace}/{.metadata.name}{"\n"}{end}'
+kubectl get envoyextensionpolicies.gateway.envoyproxy.io,backends.gateway.envoyproxy.io,clienttrafficpolicies.gateway.envoyproxy.io,envoyproxies.gateway.envoyproxy.io \
+  -A -l app.kubernetes.io/managed-by=inkwall-operator
 ```
 
-0.1.x reads and writes only a bundle in one Secret, of at most 900 KiB compressed. With chunks, its
-operator can't read the bundle and builds none: shrink the policies until the chunks are gone (the
-operator deletes them), or stay on 0.2.0.
-
-Rolling back to 0.1.0 also needs:
-
-1. Switch back to `Standalone` if you changed the mode, and wait for any signing key rotation to
-   finish (the `waf.inkwall.dev/rotation-phase` annotation on the Secret
-   `inkwall-bundle-signing-key` is empty).
-2. Delete the policies that target an `IngressRoute`.
-3. Remove the finalizer from every policy, or none of them can be deleted under 0.1.0:
-
-   ```sh
-   kubectl get wafpolicy -A -o jsonpath='{range .items[*]}{.metadata.namespace} {.metadata.name}{"\n"}{end}' |
-     while read -r ns name; do
-       kubectl -n "$ns" patch wafpolicy "$name" --type merge -p '{"metadata":{"finalizers":null}}'
-     done
-   ```
-
-Then roll back, and restart Traefik so its pods run the old engine again:
+Then roll back, and restart Traefik so its pods run the older engine again:
 
 ```sh
 helm -n inkwall-system rollback inkwall
 kubectl -n <traefik namespace> rollout restart deployment/<traefik>
 ```
 
-Rolling back to 0.1.2 or earlier reopens GHSA-9x6c-5v2m-835r; see the
-[release post](/blog/inkwall-v0-2-0/).
+Roll back to 0.2.2 rather than 0.2.0 or 0.2.1, which are affected by GHSA-r5cq-6vq5-q8qg.
+
+## From 0.1.x
+
+Upgrade to 0.2.2 first. On the way, every `WAFPolicy` gets the finalizer `waf.inkwall.dev/unwire`
+(from 0.1.0), which matters if Argo CD or Flux manages them ([GitOps](/docs/gitops/)), and bundles
+past 900 KiB compressed are split into chunk Secrets, which 0.1.x can't read. The full guide's
+[0.1.x section](https://github.com/inkwall-dev/inkwall/blob/v0.3.0/docs/upgrading.md#from-01x-to-020)
+lists every change and how to roll back.

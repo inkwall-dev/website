@@ -1,6 +1,6 @@
 ---
 title: Roadmap
-description: What v0.2.0 ships, and what the next milestones bring.
+description: What v0.3.0 ships, and what the next milestones bring.
 order: 11
 ---
 
@@ -42,7 +42,7 @@ Three security releases. 0.1.1 also brought most of the v0.2.0 work forward
   [GHSA-9x6c-5v2m-835r](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-9x6c-5v2m-835r)
   (0.1.3).
 
-## v0.2.0: hardening, today
+## v0.2.0: hardening
 
 The rest of the milestone ([release post](/blog/inkwall-v0-2-0/)):
 
@@ -59,18 +59,34 @@ The rest of the milestone ([release post](/blog/inkwall-v0-2-0/)):
 - Docs: an index, a glossary, guides for [testing policies](/docs/testing-rules/) and the
   standalone proxy, and a writing pass over the guides and design documents.
 
-## v0.3.0: Gateway API, next
+## v0.2.1, v0.2.2 and v0.1.4, v0.1.5
 
-- Gateway API `HTTPRoute` targets, with Traefik's Gateway API provider and with Envoy Gateway
-  (`ext_proc` / `ext_authz`).
-- Proxy discovery behind one integration interface.
-- Engine request counts and latency, sent to the optional control plane.
-- A faster operator with thousands of policies: it stops rewriting every policy's status for each
-  bundle.
-- `inkwallctl`: migrating ingress-nginx ModSecurity annotations to `WAFPolicy`, and testing
-  policies that target `IngressRoute` objects.
+Security releases:
+[GHSA-r78f-635q-r8w2](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-r78f-635q-r8w2)
+(0.2.1, 0.1.4), security events lost when a batch of large events exceeded a message limit; and
+[GHSA-r5cq-6vq5-q8qg](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-r5cq-6vq5-q8qg)
+(0.2.2, 0.1.5), a pod with a proxy's labels in any namespace could read the policy bundle and
+connect as an engine. Proxy pods are now recognised only in the proxy namespaces,
+`injection.proxyNamespaces`.
 
-## v1.0.0: a stable API
+## v0.3.0: Gateway API, today
+
+The milestone ([release post](/blog/inkwall-v0-3-0/)):
+
+- Gateway API `HTTPRoute` targets, with Traefik's Gateway API provider (an `ExtensionRef` filter to
+  the ForwardAuth middleware) and with Envoy Gateway (the engine called over `ext_proc`), down to
+  one rule with `sectionName`.
+- Proxy discovery behind one integration interface: `InkwallConfig.status.proxies`, and a
+  `ClusterRole` per integration, disabled on its own when its permissions are missing.
+- Engine request counts and latency per policy, sent to the optional control plane.
+- An operator that holds up with thousands of policies: statuses written only when they change
+  (a bundle reconcile at 5,000 policies and 500 engines went from 12 s to 0.4 s), proxy pods cached
+  per integration, and `GOMEMLIMIT` set from its memory limit.
+- `inkwallctl`: [migrating from ingress-nginx](/docs/migrating-from-ingress-nginx/) ModSecurity
+  annotations to `WAFPolicy`, also onto the `HTTPRoute` or `IngressRoute` objects replacing the
+  Ingresses, and testing policies that target `IngressRoute` and `HTTPRoute` objects.
+
+## v1.0.0: a stable API, next
 
 The CRDs out of `v1alpha1`, with an upgrade path and a compatibility promise.
 

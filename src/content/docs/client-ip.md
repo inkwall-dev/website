@@ -1,14 +1,15 @@
 ---
 title: Client IP
-description: Get the client's real address to the engine behind a load balancer, with the PROXY protocol or externalTrafficPolicy Local.
+description: Get the client's real address to the engine behind a load balancer, with the PROXY protocol or externalTrafficPolicy Local, for Traefik and Envoy Gateway.
 order: 9
 ---
 
 Behind a load balancer, Traefik sees the load balancer, or a node, as its peer, and so does the
 engine, unless the client's address reaches Traefik. A wrong client IP is worse than none: rules
 that match on the address would see the load balancer, and every security event would carry its
-address. The full guide, with more load balancers, is
-[`docs/client-ip.md`](https://github.com/inkwall-dev/inkwall/blob/v0.2.0/docs/client-ip.md).
+address. With Envoy Gateway, see [Envoy Gateway](#envoy-gateway). The full guide, with more load
+balancers, is
+[`docs/client-ip.md`](https://github.com/inkwall-dev/inkwall/blob/v0.3.0/docs/client-ip.md).
 
 ## How the address reaches the engine
 
@@ -70,6 +71,26 @@ service:
 kube-proxy then delivers only to Traefik pods on the node that received the packet, without
 rewriting the source. Nodes without a ready Traefik pod drop the traffic, so run Traefik on every
 node that takes traffic, or spread it.
+
+## Envoy Gateway
+
+Through Envoy Gateway, the engine runs in each Envoy pod and gets the request from Envoy's ext_proc
+filter on a Unix socket, which it trusts as a loopback peer. Envoy sets `X-Forwarded-For` before
+the filter runs, ending with the address of its own TCP peer. So, as with Traefik, Envoy must see
+the client as its peer: turn the PROXY protocol on in a `ClientTrafficPolicy` for the Gateway, or
+set `externalTrafficPolicy: Local` on the Envoy Service through your `EnvoyProxy`, as Envoy
+Gateway's [client traffic policy](https://gateway.envoyproxy.io/docs/tasks/traffic/client-traffic-policy/)
+docs show.
+
+Envoy Gateway applies one `ClientTrafficPolicy` per Gateway. For a Gateway that has none of yours,
+the operator creates its own, `inkwall-waf-<gateway>`, which raises Envoy's buffer limit so the
+engine gets whole bodies; it deletes it once you add yours. Your `connection.bufferLimit` then caps
+the bodies inspected: set it to at least the largest `body.maxBytes` of your policies (Envoy's
+default buffer is 32 KiB). Below that, larger bodies are handled as oversized (`body.onOversize`),
+and the policy's `Programmed` condition is `WiringFailed`, naming your `ClientTrafficPolicy`.
+
+The end-to-end tests don't check the client IP through Envoy Gateway yet: check it as below, with
+the engine's log in an Envoy pod (`-c inkwall-engine`).
 
 ## Check it
 
