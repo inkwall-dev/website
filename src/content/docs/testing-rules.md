@@ -6,7 +6,7 @@ order: 5
 
 `inkwallctl` is on the [releases page](https://github.com/inkwall-dev/inkwall/releases), next to the
 engine. The full guide is
-[`docs/testing-policies.md`](https://github.com/inkwall-dev/inkwall/blob/v0.2.0/docs/testing-policies.md).
+[`docs/testing-policies.md`](https://github.com/inkwall-dev/inkwall/blob/v0.3.0/docs/testing-policies.md).
 
 ## inkwallctl test
 
@@ -34,16 +34,25 @@ inkwallctl test --rules my-exclusions.conf --expect allow --har checkout-flow.ha
 ### Test WAFPolicy objects
 
 `--policy` tests the `WAFPolicy` objects you keep in Git before they reach the cluster. With the
-rule sets (`--rule-set`), ConfigMaps (`--configmap`) and Ingresses (`--ingress`) they use, it
+rule sets (`--rule-set`), ConfigMaps (`--configmap`) and the Ingresses, Traefik IngressRoutes or
+Gateway API HTTPRoutes (`--ingress`) they use, it
 resolves them as the operator does (each request goes to the policy of its host and path, and
 `policy=` names it) and compiles them as the engine does.
 
 - A file, or a directory of `.yaml`, `.yml` and `.json` files, may hold several YAML documents of
   any of these kinds, or `kubectl get -o yaml` output. Each object is read by its kind, whichever
   flag named the file.
+- Fields are checked as the API server's strict field validation does: a misspelled field is an
+  error, not a setting silently left out.
 - Without `--ingress`, a single policy applies to every request; several policies need the
-  Ingresses they target. `--ingress` reads `Ingress` objects only: an `IngressRoute` is skipped,
-  with a note.
+  Ingresses, IngressRoutes or HTTPRoutes they target.
+- An IngressRoute's match rules are read as the operator reads them: `Host`, `Path` and
+  `PathPrefix`, joined by `&&`. A policy whose IngressRoute has any other rule isn't enforced, and
+  `inkwallctl` says which rule.
+- An HTTPRoute is read as the operator reads it: its hostnames × its rules' matches (only the rule
+  a policy's `sectionName` names), with `Exact` and `PathPrefix` paths and methods. Its wildcard
+  hostnames cover subdomains at any depth. A policy whose HTTPRoute has a regular expression path,
+  or header or query parameter matches, isn't enforced, and `inkwallctl` says which match.
 - Objects the operator would reject, such as a missing rule set or rules that don't compile, are
   errors.
 - Objects without a namespace go to `--namespace` (default `default`), as with `kubectl apply -n`.

@@ -12,15 +12,19 @@ const features = [
   },
   {
     title: 'Safe by default',
-    body: 'New routes start in detect mode: log, never block. In block mode nothing is forwarded uninspected; a request that can’t be inspected in time is rejected. If Traefik can’t reach the engine at all, it answers 500 in every mode.',
+    body: 'New routes start in detect mode: log, never block. In block mode nothing is forwarded uninspected; a request that can’t be inspected in time is rejected. If the proxy can’t reach the engine at all, it answers 500, unless every policy on an Envoy Gateway route fails open.',
   },
   {
     title: 'Policy as Kubernetes objects',
-    body: 'Write a WAFPolicy against an Ingress or IngressRoute. Rules are compiled when you save them, so a typo is a kubectl error with a line number, not an outage.',
+    body: 'Write a WAFPolicy against an Ingress, IngressRoute or Gateway API HTTPRoute. Rules are compiled when you save them, so a typo is a kubectl error with a line number, not an outage.',
   },
   {
     title: 'Test rules without traffic',
-    body: 'inkwallctl test shows the verdict and matching rules for a request, a raw HTTP file or a browser HAR, against your WAFPolicy files or the cluster’s bundle, and works as a CI check.',
+    body: 'inkwallctl test shows the verdict and matching rules for a request, a raw HTTP file or a browser HAR, against your WAFPolicy files and their Ingress, IngressRoute or HTTPRoute objects, or the cluster’s bundle, and works as a CI check.',
+  },
+  {
+    title: 'Leaving ingress-nginx',
+    body: 'inkwallctl migrate ingress-nginx turns its ModSecurity annotations and ConfigMap settings into WAFPolicy objects, for the Ingresses or the HTTPRoutes and IngressRoutes replacing them, and lists what needs a human.',
   },
   {
     title: 'GitOps first, SaaS optional',
@@ -31,11 +35,10 @@ const features = [
 type State = 'works' | 'progress' | 'planned';
 const integrations: { name: string; hook: string; state: State; note: string }[] = [
   { name: 'Standalone reverse proxy', hook: 'HTTP', state: 'works', note: 'In front of any HTTP service, in or out of Kubernetes' },
-  { name: 'Traefik', hook: 'ForwardAuth', state: 'works', note: 'The operator injects the engine and wires Ingress and IngressRoute routes' },
+  { name: 'Traefik', hook: 'ForwardAuth', state: 'works', note: 'The operator injects the engine and wires Ingress, IngressRoute and Gateway API HTTPRoute routes' },
+  { name: 'Envoy Gateway (Gateway API)', hook: 'ext_proc', state: 'works', note: 'Envoy Gateway v1.9: the engine joins the Envoy pods, and each protected HTTPRoute calls it over ext_proc' },
   { name: 'Any proxy with a hook', hook: 'POST /v1/check', state: 'works', note: 'The engine’s own API, protobuf or JSON' },
-  { name: 'Kubernetes operator', hook: 'CRDs', state: 'works', note: 'Validation, signed bundles with key rotation, injection, wiring and status; scale-tested with 5,000 policies and 500 fake engines; Helm chart on GHCR' },
-  { name: 'Traefik (Gateway API)', hook: 'ForwardAuth', state: 'progress', note: 'HTTPRoute targets. Next: milestone v0.3.0' },
-  { name: 'Envoy Gateway (Gateway API)', hook: 'ext_proc / ext_authz', state: 'progress', note: 'HTTPRoute targets. Next: milestone v0.3.0' },
+  { name: 'Kubernetes operator', hook: 'CRDs', state: 'works', note: 'Validation, signed bundles with key rotation, injection, wiring, proxy discovery and status; a role per integration; per-policy request counts; scale-tested with 5,000 policies and 500 fake engines at a median peak of 409 MiB; Helm chart on GHCR' },
   { name: 'Envoy, Istio', hook: 'ext_proc / ext_authz', state: 'planned', note: '' },
   { name: 'ingress-nginx', hook: 'Lua plugin', state: 'planned', note: '' },
   { name: 'HAProxy', hook: 'SPOE', state: 'planned', note: '' },
@@ -49,7 +52,7 @@ const label: Record<State, string> = { works: 'Works today', progress: 'Next', p
 >
   <section class="hero">
     <div class="container">
-      <p class="status"><span class="dot" aria-hidden="true"></span> v0.2.0 is out: Traefik with Ingress and IngressRoute routes, installed with Helm</p>
+      <p class="status"><span class="dot" aria-hidden="true"></span> v0.3.0 is out: Gateway API HTTPRoute routes with Traefik and Envoy Gateway</p>
       <h1>One web application firewall for every ingress in your cluster</h1>
       <p class="sub">
         Inkwall protects HTTP traffic behind any proxy with the same policy. Write a <code>WAFPolicy</code>,
@@ -91,7 +94,7 @@ const label: Record<State, string> = { works: 'Works today', progress: 'Next', p
         alt="Clients reach the proxy, which asks the inkwall-engine sidecar for a verdict before forwarding allowed requests to services. The operator watches policies and routes and pushes signed policy bundles to the engine."
       />
       </div>
-      <figcaption><a href="/diagrams/system-overview.svg">The architecture</a>. Today the proxy is Traefik; the others are planned.</figcaption>
+      <figcaption><a href="/diagrams/system-overview.svg">The architecture</a>. Today the proxy is Traefik or Envoy Gateway; the others are planned.</figcaption>
     </figure>
   </section>
 
@@ -135,13 +138,14 @@ const label: Record<State, string> = { works: 'Works today', progress: 'Next', p
         <h2>Install in a minute</h2>
         <p>
           Install the operator with Helm, restart Traefik so its pods get the engine, then attach a
-          <code>WAFPolicy</code> to an Ingress or IngressRoute. Policies start in detect mode; <code>mode: Block</code> enforces.
+          <code>WAFPolicy</code> to an Ingress, IngressRoute or HTTPRoute. With Envoy Gateway, nothing to restart: it
+          rolls its Envoy pods itself. Policies start in detect mode; <code>mode: Block</code> enforces.
         </p>
         <p><a href="/docs/getting-started/">Getting started</a> walks through it, and covers the engine on its own, without Kubernetes.</p>
       </div>
       <pre><code>$ helm install inkwall \
     oci://ghcr.io/inkwall-dev/charts/inkwall \
-    --version 0.2.0 \
+    --version 0.3.0 \
     -n inkwall-system --create-namespace
 $ kubectl get wafpolicy -n shop
 NAME   MODE    READY   BUNDLE   AGE

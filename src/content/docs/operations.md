@@ -1,6 +1,6 @@
 ---
 title: Operations
-description: What happens when the operator or the engine is down, bundle size, opting a proxy out, turning injection off, deleting policies, the emergency switch and uninstalling.
+description: What happens when the operator or the engine is down, bundle size, proxy namespaces, integration permissions, opting a proxy out, turning injection off, deleting policies, the emergency switch and uninstalling.
 order: 6
 ---
 
@@ -9,7 +9,8 @@ order: 6
 Traffic is unaffected. Every engine keeps enforcing its last policy bundle, and an engine that
 starts with no bundle reads it from the cluster (the `inkwall-bundle` Secret).
 
-What depends on the operator is **creating proxy pods**:
+What depends on the operator is **creating Traefik pods**. Envoy Gateway's Envoy pods don't depend
+on it: their engine comes from the `EnvoyProxy`, not from the Pod webhook.
 
 - **No policy in block mode:** new Traefik pods start without the engine; their traffic isn't
   inspected, and the policies report `Programmed=False` (`SidecarMissing`) with the pods to restart.
@@ -48,6 +49,13 @@ What keeps an outage short:
 To find an outage, `kubectl -n <traefik namespace> get pods` shows the restarts, and Traefik logs
 `Error calling http://127.0.0.1:9001/v1/forward-auth` for each request it answered 500.
 
+**Through Envoy Gateway**, Envoy answers 500 when it can't reach the engine, unless every policy on
+the route fails open (`failureMode: Open`, or detect mode without one): then it lets the request
+through uninspected. When those policies are all in detect mode, Envoy doesn't wait for the engine
+at all, so a slow or hung engine delays nothing. Otherwise Envoy waits 500 ms longer than the
+policy's `timeout`. Large bodies take longer to inspect (the CRS takes about 200 ms on a 48 KB form
+field on a fast machine), so raise `timeout`, up to 1s, for routes that take large bodies.
+
 ## Bundle size
 
 All of a cluster's policies go into one bundle, of at most 7.2 MiB compressed (and 64 MiB
@@ -59,9 +67,67 @@ Past 75% of the limit, the operator logs `bundle nears its size limit` when it p
 limit, a change isn't published and every engine keeps the current bundle; the operator logs
 `bundle not published`. The metric `inkwall_operator_bundle_compressed_bytes` shows the size.
 
-## Traefik with other labels
+## Metrics
 
-The operator finds Traefik's pods by `app.kubernetes.io/name=traefik`. If yours carry other labels:
+The operator's metrics include:
+
+| Metric | |
+|---|---|
+| `inkwall_operator_bundle_version`, `inkwall_operator_bundle_compressed_bytes` | The current bundle, and its size |
+| `inkwall_operator_engines{state}` | Engines by state; the `Enforced` messages no longer count them |
+| `inkwall_operator_engines_left_out` | Engines left out of a replica's engine report; while any are, `Enforced` is `False` (`EnginesUnreported`) |
+| `inkwall_operator_wired_targets{integration}` | Policy targets wired, by integration (`traefik`, `envoy-gateway`) |
+| `inkwall_operator_wiring_failures{integration}` | Targets that couldn't be wired (`WiringFailed`) |
+| `inkwall_operator_request_stats_dropped_total{reason}` | Policies' request counts dropped on their way to a [control plane](/docs/control-plane/) |
+
+## Proxy namespaces
+
+The operator recognises a proxy's pods by their labels: Traefik's `app.kubernetes.io/name=traefik`,
+Envoy Gateway's `app.kubernetes.io/name=envoy` and `app.kubernetes.io/managed-by=envoy-gateway`.
+A proxy pod gets the engine, and read access to the policy bundle, which holds every namespace's
+policies and rules. Anyone who may create a pod may give it those labels, so the operator only looks
+for proxy pods in the namespaces of `injection.proxyNamespaces`: `traefik`, `kube-system` (where k3s
+and RKE2 run Traefik) and `envoy-gateway-system` by default. A pod with a proxy's labels anywhere
+else is an ordinary pod. List only namespaces where only the people who run the proxy create pods.
+
+If your proxy runs in another namespace, list it, with the defaults you still need:
+
+```sh
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.3.0 \
+  --namespace inkwall-system --reset-then-reuse-values \
+  --set 'injection.proxyNamespaces={ingress,envoy-gateway-system}'
+```
+
+Until it is listed, its pods get no engine and its routes are served uninspected
+(`Programmed=False`, `SidecarMissing`). So when pods that already run the engine are in a namespace
+the value doesn't list, `helm upgrade` stops with an error naming them, and changes nothing. Helm
+checks this only when it can reach the cluster: not with `helm template`, nor in Argo CD. `{*}`
+makes every namespace a proxy namespace, as before 0.3.0, 0.2.2 and 0.1.5: only for clusters where
+everyone who may create a pod may read every policy. Changing the value restarts the operator.
+
+## Integration permissions
+
+Each integration's permissions are in a `ClusterRole` of its own, `inkwall-operator-traefik` and
+`inkwall-operator-envoy-gateway`. The chart values `rbac.integrations.traefik` and
+`rbac.integrations.envoyGateway` choose which are granted:
+
+- `true`, the default (also when the value is missing, as with `--reuse-values` from 0.2): always
+  granted, so a proxy installed after Inkwall is protected;
+- `auto`: granted when the cluster serves the proxy's API group at install or upgrade time. Install
+  the proxy first, or run `helm upgrade` once it is. `helm template` and Argo CD can't ask the
+  cluster, so they render every role;
+- `false`: never granted.
+
+The operator checks its permissions when it starts, and every minute. An integration it lacks some
+of is disabled instead of stalling the others: policies on its proxy's routes report
+`Programmed=False` with reason `IntegrationDisabled`, naming the permissions missing, and
+`InkwallConfig.status.proxies` lists the proxy as `Unsupported`. Without Traefik's role, the Pod
+webhook selects no pod. When a role is granted or revoked, each replica restarts after a random
+delay. Routes wired before an integration was disabled stay wired: unprotect them first.
+
+## Proxies with other labels
+
+If your Traefik pods carry other labels than `app.kubernetes.io/name=traefik`:
 
 ```yaml
 apiVersion: waf.inkwall.dev/v1alpha1
@@ -75,7 +141,9 @@ spec:
 ```
 
 The operator restarts to apply it (each replica after a short random delay). Running Traefik pods
-get the engine when they restart.
+get the engine when they restart. The operator caches pods with one informer per selector, so a
+custom selector doesn't make it watch every pod in the cluster. The pods must still run in the
+[proxy namespaces](#proxy-namespaces).
 
 If the selector matches no running Traefik pod any more, new pods wouldn't get the engine, so the
 operator unwires the routes (`SidecarMissing`) until one matches again.
@@ -83,14 +151,14 @@ operator unwires the routes (`SidecarMissing`) until one matches again.
 ## Turning injection off
 
 ```sh
-helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.2.0 \
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.3.0 \
   --namespace inkwall-system --reset-then-reuse-values --set injection.enabled=false
 ```
 
 Traefik pods started from then on have no engine. The operator keeps running, unwires every route
 it wired, deletes its middlewares and reports `Programmed=False` (`InjectionDisabled`): the routes
-are served, uninspected. Turn it on again and the routes are wired again at once; restart Traefik
-to inject the engine (`PendingRestart`).
+are served, uninspected. It also undoes its Envoy Gateway wiring, as on uninstall. Turn it on again
+and the routes are wired again at once; restart Traefik to inject the engine (`PendingRestart`).
 
 ## Deleting a policy
 
@@ -117,11 +185,15 @@ removing anything. Set it back to `false` to enforce again.
 helm uninstall inkwall --namespace inkwall-system
 ```
 
-Before anything is deleted, the chart stops the operator, removes Inkwall's middleware from every
-`Ingress` and `IngressRoute` it wired, keeping yours, and removes the finalizer from every
-`WAFPolicy`. The routes keep working, uninspected; Traefik pods drop the engine when they restart.
+Before anything is deleted, the chart stops the operator and removes Inkwall's middleware from every
+`Ingress`, `IngressRoute` and `HTTPRoute` it wired, keeping yours. For Envoy Gateway, it deletes its
+`EnvoyExtensionPolicy`, `Backend` and `ClientTrafficPolicy` objects, takes the engine out of your
+`EnvoyProxy` objects, and points the Gateways it pointed at its own `EnvoyProxy` back at none. Every
+`WAFPolicy` then reports `Programmed=False` and `Ready=False` (reason `Unwired`) and loses its
+finalizer. The routes keep working, uninspected; Traefik pods drop the engine when they restart, and
+Envoy Gateway rolls its Envoy pods without it.
 The CRDs, your `WAFPolicy` objects and the operator's Secrets (the bundle, its chunks and the signing
 key) are kept, so a reinstall continues with the same keys. To remove the Secrets, delete the
 namespace.
 
-More in the [chart README](https://github.com/inkwall-dev/inkwall/tree/v0.2.0/deploy/helm/inkwall).
+More in the [chart README](https://github.com/inkwall-dev/inkwall/tree/v0.3.0/deploy/helm/inkwall).
