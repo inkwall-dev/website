@@ -58,14 +58,16 @@ field on a fast machine), so raise `timeout`, up to 1s, for routes that take lar
 
 ## Bundle size
 
-All of a cluster's policies go into one bundle, of at most 7.2 MiB compressed (and 64 MiB
+All of a cluster's policies go into one bundle, of at most 7,200 KiB compressed (and 64 MiB
 decompressed). Up to 900 KiB, it is kept in the Secret `inkwall-bundle`; past that, in chunk
 Secrets of 900 KiB, labelled `waf.inkwall.dev/bundle-chunk`. Bundles name the Core Rule Set rather
 than embed it: the operator's scale test put 5,000 policies in 134 KiB.
 
 Past 75% of the limit, the operator logs `bundle nears its size limit` when it publishes. Past the
 limit, a change isn't published and every engine keeps the current bundle; the operator logs
-`bundle not published`. The metric `inkwall_operator_bundle_compressed_bytes` shows the size.
+`bundle not published`. The policies the change would add or change are `Accepted=False` and
+`Ready=False`, reason `BundleTooLarge`, with the sizes, until it fits; the others keep their status,
+since engines run them as they are. The metric `inkwall_operator_bundle_compressed_bytes` shows the size.
 
 ## Metrics
 
@@ -93,7 +95,7 @@ else is an ordinary pod. List only namespaces where only the people who run the 
 If your proxy runs in another namespace, list it, with the defaults you still need:
 
 ```sh
-helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.3.0 \
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.3.1 \
   --namespace inkwall-system --reset-then-reuse-values \
   --set 'injection.proxyNamespaces={ingress,envoy-gateway-system}'
 ```
@@ -151,7 +153,7 @@ operator unwires the routes (`SidecarMissing`) until one matches again.
 ## Turning injection off
 
 ```sh
-helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.3.0 \
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.3.1 \
   --namespace inkwall-system --reset-then-reuse-values --set injection.enabled=false
 ```
 
@@ -179,6 +181,23 @@ kubectl get wafpolicy -A -o jsonpath='{range .items[*]}{.metadata.namespace} {.m
 `InkwallConfig.spec.suspend: true` makes every engine allow everything within seconds, without
 removing anything. Set it back to `false` to enforce again.
 
+```sh
+kubectl patch inkwallconfig default --type merge -p '{"spec":{"suspend":true}}'
+```
+
+While inspection is suspended, every `WAFPolicy` reports it: `Enforced=False` and `Ready=False`,
+reason `Suspended`. The `InkwallConfig` has a `Suspended` condition, `True` while the bundle the
+engines get suspends inspection:
+
+```sh
+kubectl get inkwallconfig default -o jsonpath='{.status.conditions[?(@.type=="Suspended")]}'
+```
+
+Once resumed, each policy is `Enforced` again when every engine runs the bundle that resumes
+inspection. The switch works even when policy changes don't fit the bundle (policies
+`Accepted=False`, reason `BundleTooLarge`): the bundle the engines run is published again,
+suspended, and once resumed, they run it as before.
+
 ## Uninstalling
 
 ```sh
@@ -191,9 +210,13 @@ Before anything is deleted, the chart stops the operator and removes Inkwall's m
 `EnvoyProxy` objects, and points the Gateways it pointed at its own `EnvoyProxy` back at none. Every
 `WAFPolicy` then reports `Programmed=False` and `Ready=False` (reason `Unwired`) and loses its
 finalizer. The routes keep working, uninspected; Traefik pods drop the engine when they restart, and
-Envoy Gateway rolls its Envoy pods without it.
+Envoy Gateway rolls its Envoy pods without it. Last, it deletes what the operator created for itself
+and the engines: the `inkwall-trust` ConfigMaps in the proxy namespaces (labelled
+`app.kubernetes.io/managed-by: inkwall-operator`; an unlabelled one of your own is kept), the engine reports (`inkwall-engines-*` ConfigMaps), the `inkwall-bundle-reader` Role
+and RoleBinding, and the operator's leader Lease. Engines still running keep their last bundle until
+their pod restarts.
 The CRDs, your `WAFPolicy` objects and the operator's Secrets (the bundle, its chunks and the signing
 key) are kept, so a reinstall continues with the same keys. To remove the Secrets, delete the
 namespace.
 
-More in the [chart README](https://github.com/inkwall-dev/inkwall/tree/v0.3.0/deploy/helm/inkwall).
+More in the [chart README](https://github.com/inkwall-dev/inkwall/tree/v0.3.1/deploy/helm/inkwall).

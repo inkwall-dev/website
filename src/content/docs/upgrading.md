@@ -1,19 +1,59 @@
 ---
 title: Upgrading
-description: Upgrade from 0.2.x to 0.3.0, what to check first, what changes by itself, protecting HTTPRoutes, and how to roll back.
+description: Upgrade from 0.3.0 to 0.3.1, and from 0.2.x to 0.3.0, what to check first, what changes by itself, protecting HTTPRoutes, and how to roll back.
 order: 2
 ---
 
-Upgrade to **0.3.0** from any 0.2 release. From 0.1.x, upgrade to 0.2.2 first, then to 0.3.0. 0.3.0
-includes every security fix since 0.2.0:
+The latest release is **0.3.1**, a patch release for 0.3.0. From 0.3.0, upgrade as
+[below](#from-030-to-031). From any 0.2 release, upgrade to 0.3.0 first, as in
+[From 0.2.x to 0.3.0](#from-02x-to-030). From 0.1.x, upgrade to 0.2.2 first, then to 0.3.0. The
+full guide is
+[`docs/upgrading.md`](https://github.com/inkwall-dev/inkwall/blob/v0.3.1/docs/upgrading.md).
+
+## From 0.3.0 to 0.3.1
+
+0.3.1 is a patch release: upgrade the chart as for 0.3.0, with `--version 0.3.1`, and restart
+Traefik so its pods run the 0.3.1 engine:
+
+```sh
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.3.1 \
+  --namespace inkwall-system --reset-then-reuse-values
+kubectl -n inkwall-system rollout status deployment/inkwall-operator
+kubectl -n <traefik namespace> rollout restart deployment/<traefik>
+```
+
+What changes by itself:
+
+- **gRPC calls are no longer denied.** In 0.3.0 the Core Rule Set denied every gRPC call in `Block`
+  mode and logged it in `Detect` mode. Now a gRPC call is inspected on its path, query and headers,
+  but not its messages; see [gRPC](/docs/grpc/).
+- **A suspended cluster is reported on every policy.** While `InkwallConfig.spec.suspend` is
+  `true`, every `WAFPolicy` is `Enforced=False` and `Ready=False`, reason `Suspended`; in 0.3.0
+  they could stay `Ready=True` while nothing was inspected. The `InkwallConfig` has a new
+  `Suspended` condition.
+- **A policy left out of a bundle too large to publish says so.** When the bundle doesn't fit its
+  Secrets (over 7,200 KiB compressed), the policies it would add or change are `Accepted=False` and
+  `Ready=False`, reason `BundleTooLarge`, until it fits. In 0.3.0 they kept the conditions of their
+  previous spec, `Accepted=True` included, while engines ran that previous spec.
+- **Suspending works when the bundle is too large.** In 0.3.0, `spec.suspend` did nothing while
+  the bundle was too large to publish; now the bundle the engines run is published again,
+  suspended.
+- **Envoy Gateway routes aren't reported `Programmed`** while the operator can't raise Envoy's
+  buffer limit for them.
+- **`helm uninstall` leaves nothing behind**: it also deletes the operator's `inkwall-trust`
+  ConfigMaps, the engine reports, the `inkwall-bundle-reader` Role and RoleBinding, and the leader
+  Lease. See [Operations](/docs/operations/).
+
+## From 0.2.x to 0.3.0
+
+0.3.0 includes every security fix since 0.2.0:
 [GHSA-r78f-635q-r8w2](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-r78f-635q-r8w2)
 (fixed in 0.2.1 and 0.1.4) and
 [GHSA-r5cq-6vq5-q8qg](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-r5cq-6vq5-q8qg)
 (fixed in 0.2.2 and 0.1.5). You need the values you installed the chart with, and Helm 3.14 or later
-for `--reset-then-reuse-values`. The full guide is
-[`docs/upgrading.md`](https://github.com/inkwall-dev/inkwall/blob/v0.3.0/docs/upgrading.md).
+for `--reset-then-reuse-values`.
 
-## Before you upgrade
+### Before you upgrade
 
 - **Check the policies that target an `HTTPRoute`.** 0.2.x accepted such targets but never
   enforced them: those policies were `Accepted=False` (`TargetUnsupported`). From 0.3.0, every
@@ -22,7 +62,7 @@ for `--reset-then-reuse-values`. The full guide is
 
   ```sh
   kubectl get wafpolicy -A -o json |
-    jq -r '.items[] | select(any(.spec.targetRefs[]; .kind == "HTTPRoute")) | "\(.metadata.namespace)/\(.metadata.name) \(.spec.mode // "Block")"'
+    jq -r '.items[] | select(any(.spec.targetRefs[]; .kind == "HTTPRoute")) | "\(.metadata.namespace)/\(.metadata.name) \(.spec.mode // "Detect")"'
   ```
 
 - **List your proxy's namespace, if it isn't a default one.** From 0.2.0 or 0.2.1, the upgrade adds
@@ -47,7 +87,7 @@ for `--reset-then-reuse-values`. The full guide is
 - **Update what parses the `Enforced` condition's message** (alerts, scripts): see
   [below](#what-changes-by-itself).
 
-## Upgrade
+### Upgrade
 
 1. Upgrade the chart, with the values you installed it with:
 
@@ -85,7 +125,7 @@ for `--reset-then-reuse-values`. The full guide is
 If Argo CD or Flux installs the chart, change the chart version in Git instead; see
 [GitOps](/docs/gitops/).
 
-## What's new
+### What's new
 
 The upgrade adds no new kinds, and no chart values besides `rbac.integrations` (and
 `injection.proxyNamespaces` from 0.2.0 or 0.2.1).
@@ -111,7 +151,7 @@ The upgrade adds no new kinds, and no chart values besides `rbac.integrations` (
   `inkwallctl test --ingress` reads `IngressRoute` and `HTTPRoute` objects, strictly
   ([Testing rules](/docs/testing-rules/)).
 
-## What changes by itself
+### What changes by itself
 
 - **`HTTPRoute` targets are enforced**, as [above](#before-you-upgrade).
 - **The `Enforced` condition's messages no longer count engines.** `every engine runs bundle 42 or
@@ -143,7 +183,7 @@ Envoy Gateway's pods need no restart: 0.2.x never put an engine in them, and Env
 them itself when the operator changes their `EnvoyProxy`. An engine image set in
 `InkwallConfig.spec.engine.image` stays as it is: change it to 0.3.0 yourself.
 
-## Protecting HTTPRoutes
+### Protecting HTTPRoutes
 
 - **Traefik:** install the Gateway API CRDs (the
   [standard channel](https://gateway-api.sigs.k8s.io/guides/getting-started/#installing-gateway-api))
@@ -167,7 +207,7 @@ spec:
 A route of another Gateway API controller is resolved into the bundle, but not wired: the policy
 is `Programmed=False` (`ControllerUnsupported`).
 
-## Check it worked
+### Check it worked
 
 ```sh
 helm -n inkwall-system list
@@ -180,7 +220,7 @@ kubectl -n <traefik namespace> get pods -l app.kubernetes.io/name=traefik \
 The chart shows 0.3.0, the policies are `Ready`, the proxies you run are `Full`, and Traefik's pods
 run `ghcr.io/inkwall-dev/inkwall-engine:0.3.0`.
 
-## Roll back
+### Roll back
 
 0.2.x neither wires nor unwires HTTPRoutes. Before `helm rollback`, unprotect them: remove the
 `HTTPRoute` entries from every policy's `targetRefs`, or delete those policies. The operator then
@@ -209,5 +249,5 @@ Roll back to 0.2.2 rather than 0.2.0 or 0.2.1, which are affected by GHSA-r5cq-6
 Upgrade to 0.2.2 first. On the way, every `WAFPolicy` gets the finalizer `waf.inkwall.dev/unwire`
 (from 0.1.0), which matters if Argo CD or Flux manages them ([GitOps](/docs/gitops/)), and bundles
 past 900 KiB compressed are split into chunk Secrets, which 0.1.x can't read. The full guide's
-[0.1.x section](https://github.com/inkwall-dev/inkwall/blob/v0.3.0/docs/upgrading.md#from-01x-to-020)
+[0.1.x section](https://github.com/inkwall-dev/inkwall/blob/v0.3.1/docs/upgrading.md#from-01x-to-022)
 lists every change and how to roll back.

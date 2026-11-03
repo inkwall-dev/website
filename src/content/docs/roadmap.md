@@ -1,6 +1,6 @@
 ---
 title: Roadmap
-description: What v0.3.0 ships, and what the next milestones bring.
+description: What v0.3.0 and v0.3.1 ship, and what the next milestones bring.
 order: 11
 ---
 
@@ -69,7 +69,7 @@ Security releases:
 connect as an engine. Proxy pods are now recognised only in the proxy namespaces,
 `injection.proxyNamespaces`.
 
-## v0.3.0: Gateway API, today
+## v0.3.0: Gateway API
 
 The milestone ([release post](/blog/inkwall-v0-3-0/)):
 
@@ -86,6 +86,18 @@ The milestone ([release post](/blog/inkwall-v0-3-0/)):
   annotations to `WAFPolicy`, also onto the `HTTPRoute` or `IngressRoute` objects replacing the
   Ingresses, and testing policies that target `IngressRoute` and `HTTPRoute` objects.
 
+## v0.3.1: gRPC calls and honest status, today
+
+A patch release ([release post](/blog/inkwall-v0-3-1/)):
+
+- [gRPC](/docs/grpc/) calls are no longer denied: their path, query and metadata are inspected,
+  their messages not yet.
+- Status never claims protection that isn't there: policies report a suspended cluster
+  (`Suspended`) and a bundle too large to publish (`BundleTooLarge`), and Envoy Gateway routes
+  aren't `Programmed` while the operator can't raise Envoy's buffer limit for them.
+- Suspending works when the bundle is too large; `helm uninstall` leaves nothing behind; a
+  `version` command in `inkwallctl`, `inkwall-engine` and `inkwall-operator`.
+
 ## v0.4.0: more proxies, next
 
 The [milestone](https://github.com/inkwall-dev/inkwall/milestone/12):
@@ -95,7 +107,7 @@ The [milestone](https://github.com/inkwall-dev/inkwall/milestone/12):
   as Envoy Gateway.
 - HAProxy, through an SPOE agent ([#282](https://github.com/inkwall-dev/inkwall/issues/282)).
 - Response inspection, not only requests ([#274](https://github.com/inkwall-dev/inkwall/issues/274)).
-- gRPC ([#275](https://github.com/inkwall-dev/inkwall/issues/275)) and WebSocket
+- Fuller gRPC support, reading the messages ([#275](https://github.com/inkwall-dev/inkwall/issues/275)), and WebSocket
   ([#276](https://github.com/inkwall-dev/inkwall/issues/276)) support.
 
 ## v1.0.0: a stable API

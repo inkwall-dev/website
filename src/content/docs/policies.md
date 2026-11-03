@@ -143,10 +143,10 @@ Each policy reports how far it got, as conditions that work with `kubectl wait` 
 
 | Condition | True when | Typical reasons when false |
 |---|---|---|
-| `Accepted` | The policy is valid and its references resolve | `InvalidRef`, `Conflict`, `TargetUnsupported` |
+| `Accepted` | The policy is valid, its references resolve, and the bundle with it fits | `InvalidRef`, `Conflict`, `TargetUnsupported`, `BundleTooLarge` |
 | `Programmed` | The proxy of every target sends its routes to the engine | `PendingRestart` (restart Traefik to inject the engine), `SidecarMissing`, `InjectionDisabled`, `IntegrationDisabled`, `ControllerUnsupported`, `WiringFailed`, `Unwired` (after `helm uninstall`) |
-| `Enforced` | Every engine runs a bundle with this policy as it is | `EnginesBehind`, `EngineNack`, `EnginesUnreported`, `NoEngines` |
-| `Ready` | All three | The first failing condition's reason |
+| `Enforced` | Every engine runs a bundle with this policy as it is, and inspection isn't suspended | `EnginesBehind`, `EngineNack`, `EnginesUnreported`, `NoEngines`, `Suspended` |
+| `Ready` | All three | `Suspended` while inspection is [suspended](/docs/operations/), else the first failing condition's reason |
 
 `status.bundleVersion` is the first bundle that enforces the policy as it is now; a bundle that
 changes only other policies leaves it, so the `BUNDLE` column differs between policies. The

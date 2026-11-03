@@ -9,7 +9,7 @@ engine, unless the client's address reaches Traefik. A wrong client IP is worse 
 that match on the address would see the load balancer, and every security event would carry its
 address. With Envoy Gateway, see [Envoy Gateway](#envoy-gateway). The full guide, with more load
 balancers, is
-[`docs/client-ip.md`](https://github.com/inkwall-dev/inkwall/blob/v0.3.0/docs/client-ip.md).
+[`docs/client-ip.md`](https://github.com/inkwall-dev/inkwall/blob/v0.3.1/docs/client-ip.md).
 
 ## How the address reaches the engine
 
@@ -87,7 +87,9 @@ the operator creates its own, `inkwall-waf-<gateway>`, which raises Envoy's buff
 engine gets whole bodies; it deletes it once you add yours. Your `connection.bufferLimit` then caps
 the bodies inspected: set it to at least the largest `body.maxBytes` of your policies (Envoy's
 default buffer is 32 KiB). Below that, larger bodies are handled as oversized (`body.onOversize`),
-and the policy's `Programmed` condition is `WiringFailed`, naming your `ClientTrafficPolicy`.
+and the policy's `Programmed` condition is `WiringFailed`, naming your `ClientTrafficPolicy`. While
+the operator can't create or update its own (an admission policy refuses it, say), the routes whose
+body Envoy holds are `WiringFailed` too, with the error, until it's there and accepted.
 
 The end-to-end tests don't check the client IP through Envoy Gateway yet: check it as below, with
 the engine's log in an Envoy pod (`-c inkwall-engine`).
