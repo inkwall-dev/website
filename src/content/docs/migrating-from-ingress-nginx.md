@@ -9,7 +9,7 @@ settings into `WAFPolicy` objects, so the routes keep their WAF when they move t
 `HTTPRoute`s served by Traefik or Envoy Gateway. `inkwallctl` is on the
 [releases page](https://github.com/inkwall-dev/inkwall/releases); it only reads, and never changes
 the cluster. The full guide, with every setting and how it maps, is
-[`docs/migrating-from-ingress-nginx.md`](https://github.com/inkwall-dev/inkwall/blob/v0.3.1/docs/migrating-from-ingress-nginx.md).
+[`docs/migrating-from-ingress-nginx.md`](https://github.com/inkwall-dev/inkwall/blob/v0.3.2/docs/migrating-from-ingress-nginx.md).
 
 ## Convert the settings
 
