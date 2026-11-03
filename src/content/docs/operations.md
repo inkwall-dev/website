@@ -181,8 +181,22 @@ kubectl get wafpolicy -A -o jsonpath='{range .items[*]}{.metadata.namespace} {.m
 `InkwallConfig.spec.suspend: true` makes every engine allow everything within seconds, without
 removing anything. Set it back to `false` to enforce again.
 
+The `InkwallConfig` named `default` is optional, and a fresh install has none. If
+`kubectl get inkwallconfig default` finds it, set the field on it; if not, create it:
+
 ```sh
+# The cluster has an InkwallConfig named default:
 kubectl patch inkwallconfig default --type merge -p '{"spec":{"suspend":true}}'
+
+# It has none:
+kubectl create -f - <<'EOF'
+apiVersion: waf.inkwall.dev/v1alpha1
+kind: InkwallConfig
+metadata:
+  name: default
+spec:
+  suspend: true
+EOF
 ```
 
 While inspection is suspended, every `WAFPolicy` reports it: `Enforced=False` and `Ready=False`,
