@@ -35,13 +35,12 @@ const features = [
 type State = 'works' | 'progress' | 'planned';
 const integrations: { name: string; hook: string; state: State; note: string }[] = [
   { name: 'Standalone reverse proxy', hook: 'HTTP', state: 'works', note: 'In front of any HTTP service, in or out of Kubernetes' },
-  { name: 'Traefik', hook: 'ForwardAuth', state: 'works', note: 'The operator injects the engine and wires Ingress, IngressRoute and Gateway API HTTPRoute routes' },
-  { name: 'Envoy Gateway (Gateway API)', hook: 'ext_proc', state: 'works', note: 'Envoy Gateway v1.9: the engine joins the Envoy pods, and each protected HTTPRoute calls it over ext_proc' },
+  { name: 'Traefik', hook: 'ForwardAuth', state: 'works', note: 'Since v0.1.0; the operator injects the engine and wires Ingress, IngressRoute and, since v0.3.0, Gateway API HTTPRoute routes' },
+  { name: 'Envoy Gateway (Gateway API)', hook: 'ext_proc', state: 'works', note: 'Since v0.3.0, with Envoy Gateway v1.9: the engine joins the Envoy pods, and each protected HTTPRoute calls it over ext_proc' },
   { name: 'Any proxy with a hook', hook: 'POST /v1/check', state: 'works', note: 'The engine’s own API, protobuf or JSON' },
   { name: 'Kubernetes operator', hook: 'CRDs', state: 'works', note: 'Validation, signed bundles with key rotation, injection, wiring, proxy discovery and status; a role per integration; per-policy request counts; scale-tested with 5,000 policies and 500 fake engines at a median peak of 409 MiB; Helm chart on GHCR' },
-  { name: 'Envoy, Istio', hook: 'ext_proc / ext_authz', state: 'planned', note: '' },
-  { name: 'ingress-nginx', hook: 'Lua plugin', state: 'planned', note: '' },
-  { name: 'HAProxy', hook: 'SPOE', state: 'planned', note: '' },
+  { name: 'Istio, raw Envoy', hook: 'ext_proc', state: 'planned', note: 'v0.4.0' },
+  { name: 'HAProxy', hook: 'SPOE', state: 'planned', note: 'v0.4.0' },
   { name: 'Caddy', hook: 'Module', state: 'planned', note: '' },
 ];
 const label: Record<State, string> = { works: 'Works today', progress: 'Next', planned: 'Planned' };
@@ -94,7 +93,7 @@ const label: Record<State, string> = { works: 'Works today', progress: 'Next', p
         alt="Clients reach the proxy, which asks the inkwall-engine sidecar for a verdict before forwarding allowed requests to services. The operator watches policies and routes and pushes signed policy bundles to the engine."
       />
       </div>
-      <figcaption><a href="/diagrams/system-overview.svg">The architecture</a>. Today the proxy is Traefik or Envoy Gateway; the others are planned.</figcaption>
+      <figcaption><a href="/diagrams/system-overview.svg">The architecture</a>. Today the proxy is Traefik or Envoy Gateway; Istio, raw Envoy and HAProxy are planned for v0.4.0.</figcaption>
     </figure>
   </section>
 
