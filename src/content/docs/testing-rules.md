@@ -5,8 +5,8 @@ order: 5
 ---
 
 `inkwallctl` is on the [releases page](https://github.com/inkwall-dev/inkwall/releases), next to the
-engine. The full guide is
-[`docs/testing-policies.md`](https://github.com/inkwall-dev/inkwall/blob/v0.3.0/docs/testing-policies.md).
+engine; `inkwallctl version` prints which release it is. The full guide is
+[`docs/testing-policies.md`](https://github.com/inkwall-dev/inkwall/blob/v0.3.1/docs/testing-policies.md).
 
 ## inkwallctl test
 

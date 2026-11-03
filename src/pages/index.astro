@@ -51,7 +51,7 @@ const label: Record<State, string> = { works: 'Works today', progress: 'Next', p
 >
   <section class="hero">
     <div class="container">
-      <p class="status"><span class="dot" aria-hidden="true"></span> v0.3.0 is out: Gateway API HTTPRoute routes with Traefik and Envoy Gateway</p>
+      <p class="status"><span class="dot" aria-hidden="true"></span> v0.3.1 is out: gRPC calls are no longer denied, and status never claims protection that isn’t there</p>
       <h1>One web application firewall for every ingress in your cluster</h1>
       <p class="sub">
         Inkwall protects HTTP traffic behind any proxy with the same policy. Write a <code>WAFPolicy</code>,
@@ -144,7 +144,7 @@ const label: Record<State, string> = { works: 'Works today', progress: 'Next', p
       </div>
       <pre><code>$ helm install inkwall \
     oci://ghcr.io/inkwall-dev/charts/inkwall \
-    --version 0.3.0 \
+    --version 0.3.1 \
     -n inkwall-system --create-namespace
 $ kubectl get wafpolicy -n shop
 NAME   MODE    READY   BUNDLE   AGE
