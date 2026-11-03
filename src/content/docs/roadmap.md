@@ -1,6 +1,6 @@
 ---
 title: Roadmap
-description: What v0.3.0 and v0.3.1 ship, and what the next milestones bring.
+description: What v0.3.0, v0.3.1 and v0.3.2 ship, and what the next milestones bring.
 order: 11
 ---
 
@@ -86,7 +86,13 @@ The milestone ([release post](/blog/inkwall-v0-3-0/)):
   annotations to `WAFPolicy`, also onto the `HTTPRoute` or `IngressRoute` objects replacing the
   Ingresses, and testing policies that target `IngressRoute` and `HTTPRoute` objects.
 
-## v0.3.1: gRPC calls and honest status, today
+## v0.3.2: WebSockets through Envoy, today
+
+A fix-only patch release ([release post](/blog/inkwall-v0-3-2/)): WebSocket handshakes through
+Envoy Gateway are decided on their headers and upgrade, instead of being held until a timeout
+(`Block`) or logged as oversized (`Detect`). The messages after the upgrade aren't inspected.
+
+## v0.3.1: gRPC calls and honest status
 
 A patch release ([release post](/blog/inkwall-v0-3-1/)):
 

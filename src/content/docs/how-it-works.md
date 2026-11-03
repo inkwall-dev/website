@@ -11,7 +11,7 @@ down, engines keep enforcing the last policy they received.
 
 ## The operator
 
-In v0.3.1, with Traefik and Envoy Gateway:
+In v0.3.2, with Traefik and Envoy Gateway:
 
 1. **Validates** policies and rule sets when you save them, compiling the rules with the engine's
    own Coraza version.
@@ -61,7 +61,7 @@ from 12 s to 0.4 s, and the slowest of 10 policy changes reached every engine in
 also sets `GOMEMLIMIT` to 90% of its container's memory limit and no longer makes the allocations
 that raised its peak: over 5 runs at that size, its median peak memory went from 472 to 409 MiB,
 under the chart's default 512 MiB limit. The measurements are in the
-[operator design](https://github.com/inkwall-dev/inkwall/blob/v0.3.1/docs/design/0004-operator.md#8-scale-targets-v1).
+[operator design](https://github.com/inkwall-dev/inkwall/blob/v0.3.2/docs/design/0004-operator.md#8-scale-targets-v1).
 
 ## The engine
 
@@ -141,6 +141,7 @@ request with an absolute-form target (`GET http://host/path`) or an invalid `Hos
 
 Istio and raw Envoy (`ext_proc`, as with Envoy Gateway) and HAProxy (SPOE) are planned for v0.4.0,
 with response inspection, inspecting gRPC messages (gRPC calls are inspected on their path and
-metadata today, see [gRPC](/docs/grpc/)) and WebSocket; Caddy (a module) and protecting LLM APIs come later.
+metadata today, see [gRPC](/docs/grpc/)) and WebSocket messages (handshakes through Envoy
+Gateway are inspected and upgrade since v0.3.2; the messages after them aren't inspected); Caddy (a module) and protecting LLM APIs come later.
 See the [roadmap](/docs/roadmap/). ingress-nginx is retired upstream and not planned: see
 [Migrating from ingress-nginx](/docs/migrating-from-ingress-nginx/).

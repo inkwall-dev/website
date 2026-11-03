@@ -9,7 +9,7 @@ engine, unless the client's address reaches Traefik. A wrong client IP is worse 
 that match on the address would see the load balancer, and every security event would carry its
 address. With Envoy Gateway, see [Envoy Gateway](#envoy-gateway). The full guide, with more load
 balancers, is
-[`docs/client-ip.md`](https://github.com/inkwall-dev/inkwall/blob/v0.3.1/docs/client-ip.md).
+[`docs/client-ip.md`](https://github.com/inkwall-dev/inkwall/blob/v0.3.2/docs/client-ip.md).
 
 ## How the address reaches the engine
 

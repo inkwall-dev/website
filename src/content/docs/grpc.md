@@ -9,7 +9,7 @@ metadata, and their messages are not. Before v0.3.1, the Core Rule Set denied ev
 `Block` mode and logged it in `Detect` mode. Fuller gRPC support (reading the messages, streaming,
 a gRPC status on a denial) is planned for v0.4.0
 ([#275](https://github.com/inkwall-dev/inkwall/issues/275)). The full guide is
-[`docs/grpc.md`](https://github.com/inkwall-dev/inkwall/blob/v0.3.1/docs/grpc.md).
+[`docs/grpc.md`](https://github.com/inkwall-dev/inkwall/blob/v0.3.2/docs/grpc.md).
 
 ## Which requests are gRPC calls
 
