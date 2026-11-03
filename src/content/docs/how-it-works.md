@@ -139,5 +139,7 @@ request with an absolute-form target (`GET http://host/path`) or an invalid `Hos
 
 ![The engine inspects the request, forwards allowed requests to the app, and answers denied or failed ones itself.](/diagrams/reverse-proxy.svg)
 
-Raw Envoy and Istio (`ext_proc`, `ext_authz`), ingress-nginx (a Lua plugin), HAProxy (SPOE) and
-Caddy (a module) are designed, not built yet; see the [roadmap](/docs/roadmap/).
+Istio and raw Envoy (`ext_proc`, as with Envoy Gateway) and HAProxy (SPOE) are planned for v0.4.0,
+with response inspection, gRPC and WebSocket; Caddy (a module) and protecting LLM APIs come later.
+See the [roadmap](/docs/roadmap/). ingress-nginx is retired upstream and not planned: see
+[Migrating from ingress-nginx](/docs/migrating-from-ingress-nginx/).

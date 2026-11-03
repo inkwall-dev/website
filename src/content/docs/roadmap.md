@@ -86,10 +86,28 @@ The milestone ([release post](/blog/inkwall-v0-3-0/)):
   annotations to `WAFPolicy`, also onto the `HTTPRoute` or `IngressRoute` objects replacing the
   Ingresses, and testing policies that target `IngressRoute` and `HTTPRoute` objects.
 
-## v1.0.0: a stable API, next
+## v0.4.0: more proxies, next
+
+The [milestone](https://github.com/inkwall-dev/inkwall/milestone/12):
+
+- Istio ([#281](https://github.com/inkwall-dev/inkwall/issues/281)) and raw Envoy
+  ([#283](https://github.com/inkwall-dev/inkwall/issues/283)), through the same `ext_proc` adapter
+  as Envoy Gateway.
+- HAProxy, through an SPOE agent ([#282](https://github.com/inkwall-dev/inkwall/issues/282)).
+- Response inspection, not only requests ([#274](https://github.com/inkwall-dev/inkwall/issues/274)).
+- gRPC ([#275](https://github.com/inkwall-dev/inkwall/issues/275)) and WebSocket
+  ([#276](https://github.com/inkwall-dev/inkwall/issues/276)) support.
+
+## v1.0.0: a stable API
 
 The CRDs out of `v1alpha1`, with an upgrade path and a compatibility promise.
 
 ## Later
 
-ingress-nginx (a Lua plugin), HAProxy (SPOE) and Caddy (a module).
+- Protecting LLM APIs against the OWASP Top 10 for LLM applications
+  ([#277](https://github.com/inkwall-dev/inkwall/issues/277)).
+- Caddy (a module).
+
+ingress-nginx is not planned: it is retired upstream. For its users, Inkwall's answer is
+migration: `inkwallctl migrate ingress-nginx` turns its ModSecurity annotations into policies, see
+[Migrating from ingress-nginx](/docs/migrating-from-ingress-nginx/).
