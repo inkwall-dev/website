@@ -1,15 +1,86 @@
 ---
 title: Upgrading
-description: Upgrade from 0.3.1 to 0.3.2, from 0.3.0 to 0.3.1, and from 0.2.x to 0.3.0, what to check first, what changes by itself, protecting HTTPRoutes, and how to roll back.
+description: Upgrade from 0.3.x to 0.4.0, from 0.3.1 to 0.3.2, from 0.3.0 to 0.3.1, and from 0.2.x to 0.3.0, what to check first, what changes by itself, protecting HTTPRoutes, and how to roll back.
 order: 2
 ---
 
-The latest release is **0.3.2**, a patch release for 0.3. From 0.3.1 or 0.3.0, upgrade straight
-to 0.3.2 as [below](#from-031-to-032); from 0.3.0, what changed in 0.3.1 is
-[next](#from-030-to-031). From any 0.2 release, upgrade to 0.3.0 first, as in
+The latest release is **0.4.0**. From any 0.3 release, upgrade straight to 0.4.0 as
+[below](#from-03x-to-040); what changed in the 0.3 patch releases is in the sections after it.
+From any 0.2 release, upgrade to 0.3.0 first, as in
 [From 0.2.x to 0.3.0](#from-02x-to-030). From 0.1.x, upgrade to 0.2.2 first, then to 0.3.0. The
 full guide is
-[`docs/upgrading.md`](https://github.com/inkwall-dev/inkwall/blob/v0.3.2/docs/upgrading.md).
+[`docs/upgrading.md`](https://github.com/inkwall-dev/inkwall/blob/v0.4.0/docs/upgrading.md).
+
+## From 0.3.x to 0.4.0
+
+Upgrade the chart, with the values you installed it with, then restart the proxies whose pods
+start with the engine, so they run the 0.4.0 engine:
+
+```sh
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.4.0 \
+  --namespace inkwall-system --reset-then-reuse-values
+kubectl -n inkwall-system rollout status deployment/inkwall-operator
+kubectl -n <traefik namespace> rollout restart deployment/<traefik>
+```
+
+The chart upgrades the CRDs too (`crds.install`). If you install the CRDs yourself, apply 0.4.0's
+first:
+
+```sh
+helm template inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.4.0 \
+  --show-only templates/crds.yaml | kubectl apply --server-side -f -
+```
+
+Envoy Gateway's Envoy pods get the 0.4.0 engine as the operator updates them. Pods of Istio's
+ingress gateways and of the HAProxy Kubernetes Ingress Controller that ran before the upgrade get
+the engine only when restarted.
+
+### What's new in 0.4.0
+
+Nothing below changes a policy you have: the new fields are off unless you set them.
+
+- **Istio** (1.28 or later): the `HTTPRoute` routes of its Gateways, and `VirtualService` targets
+  (`group: networking.istio.io`) served by its ingress gateways. See [Proxies](/docs/proxies/).
+- **The HAProxy Kubernetes Ingress Controller** (3.1 or later) is wired by the operator; an HAProxy
+  you configure yourself can call `inkwall-engine spoe`, and an Envoy you configure yourself
+  `inkwall-engine ext-proc`.
+- **`WAFPolicy` fields:** `responses` (inspect the app's responses, through Envoy Gateway),
+  `body.grpcMessages: Inspect` (the text in gRPC messages) and `webSocket` (allowed origins and
+  required headers for WebSocket handshakes). See [Policies](/docs/policies/) and
+  [gRPC](/docs/grpc/). A policy that sets one isn't `Enforced` (`EnginesOutdated`) while an engine
+  before 0.4.0 runs it.
+- **WebSocket messages, through the engine's reverse proxy**, with `--websocket-messages inspect`.
+- **New chart values**, each granting a `ClusterRole`, `true` by default (also with
+  `--reuse-values`): `rbac.integrations.istio` (`inkwall-operator-istio`: `EnvoyFilter` objects,
+  ConfigMaps, Gateways), `rbac.integrations.istioIngress` (`inkwall-operator-istio-ingress`: reads
+  VirtualServices and Istio's Gateways, writes `EnvoyFilter` objects) and
+  `rbac.integrations.haproxy` (`inkwall-operator-haproxy`: the backend snippet annotations of the
+  controller's Ingresses). `auto` grants one only when the cluster serves that proxy's API, `false`
+  never; without its role, the operator disables that integration (`IntegrationDisabled`).
+
+### What changes by itself in 0.4.0
+
+- **Three more default proxy namespaces:** `istio-ingress`, `istio-system` and
+  `haproxy-controller`. If you set `injection.proxyNamespaces`, your value is kept: add your Istio
+  Gateways' and the HAProxy controller's namespaces to it. Changing the value restarts the
+  operator.
+- **New Pod webhooks.** Pods labelled `istio: ingressgateway` in the proxy namespaces get the engine
+  when they are created, as Traefik's do; while a policy is in `Block` mode, they can't start while
+  the operator is down. Set `rbac.integrations.istioIngress=false` to leave them alone. The HAProxy
+  controller's pods get the engine from a webhook of their own. A cluster without these proxies is
+  unaffected.
+- **A denied gRPC call is answered as gRPC:** `grpc-status` 7 and a `grpc-message` naming the
+  request ID. Through Envoy Gateway, raw Envoy and the engine's reverse proxy the HTTP status is
+  200, as for any gRPC error, so Envoy's access log shows 200 for these denials; through Traefik it
+  stays 403. Update dashboards or alerts that count denied gRPC calls by HTTP 403.
+- **gRPC-Web text calls pass when clean.** In 0.3.x the Core Rule Set denied every one in `Block`
+  mode (rule 920420), and logged it in `Detect` mode.
+- **Bundles carry a probe key:** the first bundle after the upgrade is a new version with the same
+  policies. Engines before 0.4.0 ignore the key.
+- **New reasons to account for:** `Enforced` can be `EnginesOutdated`, `Programmed` can be
+  `ResponsesNotInspected` or `Unverified`, and security events and `inkwall_requests_total` have a
+  new reason, `websocket`; security events have a `phase` field (`request` or `response`). Update
+  alerts or scripts that match on these.
 
 ## From 0.3.1 to 0.3.2
 
@@ -273,5 +344,5 @@ Roll back to 0.2.2 rather than 0.2.0 or 0.2.1, which are affected by GHSA-r5cq-6
 Upgrade to 0.2.2 first. On the way, every `WAFPolicy` gets the finalizer `waf.inkwall.dev/unwire`
 (from 0.1.0), which matters if Argo CD or Flux manages them ([GitOps](/docs/gitops/)), and bundles
 past 900 KiB compressed are split into chunk Secrets, which 0.1.x can't read. The full guide's
-[0.1.x section](https://github.com/inkwall-dev/inkwall/blob/v0.3.2/docs/upgrading.md#from-01x-to-022)
+[0.1.x section](https://github.com/inkwall-dev/inkwall/blob/v0.4.0/docs/upgrading.md#from-01x-to-022)
 lists every change and how to roll back.

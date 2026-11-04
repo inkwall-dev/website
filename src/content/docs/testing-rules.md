@@ -6,7 +6,7 @@ order: 5
 
 `inkwallctl` is on the [releases page](https://github.com/inkwall-dev/inkwall/releases), next to the
 engine; `inkwallctl version` prints which release it is. The full guide is
-[`docs/testing-policies.md`](https://github.com/inkwall-dev/inkwall/blob/v0.3.2/docs/testing-policies.md).
+[`docs/testing-policies.md`](https://github.com/inkwall-dev/inkwall/blob/v0.4.0/docs/testing-policies.md).
 
 ## inkwallctl test
 
@@ -34,8 +34,8 @@ inkwallctl test --rules my-exclusions.conf --expect allow --har checkout-flow.ha
 ### Test WAFPolicy objects
 
 `--policy` tests the `WAFPolicy` objects you keep in Git before they reach the cluster. With the
-rule sets (`--rule-set`), ConfigMaps (`--configmap`) and the Ingresses, Traefik IngressRoutes or
-Gateway API HTTPRoutes (`--ingress`) they use, it
+rule sets (`--rule-set`), ConfigMaps (`--configmap`) and the Ingresses, Traefik IngressRoutes,
+Gateway API HTTPRoutes or Istio VirtualServices (`--ingress`) they use, it
 resolves them as the operator does (each request goes to the policy of its host and path, and
 `policy=` names it) and compiles them as the engine does.
 
