@@ -1,7 +1,7 @@
 ---
 title: Inkwall v0.4.0
 description: Istio, HAProxy and raw Envoy; response inspection through Envoy Gateway; the text in gRPC messages; WebSocket handshake rules; and an honest status when an engine is too old.
-date: 2026-11-05
+date: 2026-11-04
 author: The Inkwall team
 ---
 
