@@ -39,14 +39,16 @@ spec:
 
 | Field | What it does |
 |---|---|
-| `targetRefs` | The routes to protect: `Ingress` objects served by Traefik, Traefik `IngressRoute` objects (`group: traefik.io`), and Gateway API `HTTPRoute` objects (`group: gateway.networking.k8s.io`) served by Traefik or Envoy Gateway, optionally one rule (`sectionName`) |
+| `targetRefs` | The routes to protect: `Ingress` objects served by Traefik or the HAProxy Kubernetes Ingress Controller, Traefik `IngressRoute` objects (`group: traefik.io`), Gateway API `HTTPRoute` objects (`group: gateway.networking.k8s.io`) served by Traefik, Envoy Gateway or Istio, optionally one rule (`sectionName`), and Istio `VirtualService` objects (`group: networking.istio.io`) |
 | `mode` | `Detect` (log, let through) or `Block` (reject) |
 | `failureMode` | What happens when a request can't be inspected in time: `Closed` (503) or `Open`. Unset: closed in block mode, open in detect mode |
 | `timeout` | Inspection deadline per request, more than 0 and at most 1s |
 | `skip.paths`, `skip.bodyPaths` | Paths never inspected, or whose body isn't; exact (`/healthz`) or prefix (`/static/*`) |
 | `ruleSets` | The rules to run, in order; with no entry, the Core Rule Set with its defaults |
 | `exclusions` | Rule IDs to turn off, everywhere or for a path, an argument or both |
-| `body` | Whether bodies are inspected, how much of them, and what happens to larger ones |
+| `body` | Whether bodies are inspected, how much of them, and what happens to larger ones; `grpcMessages: Inspect` reads the text in gRPC messages ([gRPC](/docs/grpc/)) |
+| `responses` | Whether the app's responses are inspected too, for data leaks ([below](#responses)) |
+| `webSocket` | The origins a WebSocket handshake may come from, and the headers it must have ([below](#websocket-handshakes)) |
 
 ### IngressRoute targets
 
@@ -91,6 +93,71 @@ the bundle, but not wired (`ControllerUnsupported`). The proxy needs the Gateway
   (`providers.kubernetesGateway.enabled=true` in its chart).
 - **Envoy Gateway** (v1.9; not with `mergeGateways`, nor Envoy as a DaemonSet): turn on its Backend
   API (`config.envoyGateway.extensionApis.enableBackend=true` in its chart).
+- **Istio** (1.28 or later): its Gateway API implementation (on by default) and the Gateway API
+  CRDs. The operator adds the engine to a Gateway's pods through the ConfigMap the Gateway names,
+  and an `EnvoyFilter` sends the protected routes to it
+  ([Istio](https://github.com/inkwall-dev/inkwall/blob/v0.4.0/docs/istio.md)).
+
+### VirtualService targets
+
+An Istio `VirtualService`, served by Istio's ingress gateways, needs its group:
+
+```yaml
+spec:
+  targetRefs:
+  - {group: networking.istio.io, kind: VirtualService, name: web}
+```
+
+Every http route of the VirtualService needs a `name`. Its routes are its `hosts` with each http
+route's `uri` (`exact` or `prefix`) and `method` (`exact`) matches; anything else (a `regex`,
+`headers`, `queryParams`, a `delegate`, a short mesh host name) is refused (`TargetUnsupported`).
+The ingress gateway's pods (labelled `istio: ingressgateway`) get the engine from the Pod webhook
+when they are created: restart those that ran before Inkwall. See
+[VirtualServices](https://github.com/inkwall-dev/inkwall/blob/v0.4.0/docs/istio.md#virtualservices).
+
+### Responses
+
+```yaml
+spec:
+  responses:
+    inspect: true
+    maxBytes: 65536         # the default
+    onOversize: Deny        # or Allow
+```
+
+The engine also inspects what the app answers, for data leaks: the Core Rule Set's `RESPONSE-95x`
+rules find SQL errors, stack traces and directory listings. In `Block` mode a response that leaks
+is replaced with 403; in `Detect` mode it is logged, with `"phase":"response"` in the event. Only
+Envoy Gateway sends responses to the engine: on a Traefik or Istio route, such a policy is
+`Programmed=False` (`ResponsesNotInspected`), naming the routes, while their requests are still
+inspected. It costs about 0.85 ms of engine CPU per KiB of response, so a route of large HTML pages
+is CPU-bound in the engine: raise `timeout` with `maxBytes`, and measure first
+([response inspection](https://github.com/inkwall-dev/inkwall/blob/v0.4.0/docs/design/0006-adapter-protocols.md#response-inspection-v040)).
+
+### WebSocket handshakes
+
+```yaml
+spec:
+  webSocket:
+    allowedOrigins: ["https://app.example.com", "https://*.example.com"]
+    requiredHeaders: [Authorization]
+```
+
+A browser sends a page's cookies with a WebSocket handshake to any site, so a page on another site
+can open a WebSocket to your app as the signed-in user. A handshake from an origin
+`allowedOrigins` doesn't list (`*.` for subdomains), or without a header `requiredHeaders` names,
+gets 403 before the upgrade in `Block` mode, and is logged with reason `websocket` in `Detect`
+mode. `allowMissingOrigin: true` lets a client that sends no `Origin` through. The handshake's URL
+and headers are inspected by the rules through every proxy; the messages after the upgrade are not,
+except by the engine's own reverse proxy
+([WebSocket](https://github.com/inkwall-dev/inkwall/blob/v0.4.0/docs/websocket.md)).
+
+### Engines before 0.4.0
+
+`webSocket`, `body.grpcMessages: Inspect` and `responses` are new in 0.4.0, and an older engine
+ignores them. While one runs a policy that sets them, the policy is `Enforced=False`, reason
+`EnginesOutdated`, naming the first such engine: restart the proxy's pods so they get the 0.4.0
+engine.
 
 ### Deleting a policy
 
@@ -144,8 +211,8 @@ Each policy reports how far it got, as conditions that work with `kubectl wait` 
 | Condition | True when | Typical reasons when false |
 |---|---|---|
 | `Accepted` | The policy is valid, its references resolve, and the bundle with it fits | `InvalidRef`, `Conflict`, `TargetUnsupported`, `BundleTooLarge` |
-| `Programmed` | The proxy of every target sends its routes to the engine | `PendingRestart` (restart Traefik to inject the engine), `SidecarMissing`, `InjectionDisabled`, `IntegrationDisabled`, `ControllerUnsupported`, `WiringFailed`, `Unwired` (after `helm uninstall`) |
-| `Enforced` | Every engine runs a bundle with this policy as it is, and inspection isn't suspended | `EnginesBehind`, `EngineNack`, `EnginesUnreported`, `NoEngines`, `Suspended` |
+| `Programmed` | The proxy of every target sends its routes to the engine | `PendingRestart` (restart Traefik to inject the engine), `SidecarMissing`, `InjectionDisabled`, `IntegrationDisabled`, `ControllerUnsupported`, `WiringFailed`, `ResponsesNotInspected` (the policy inspects responses on a proxy that doesn't send them), `Unverified` (HAProxy: the operator's probe hasn't proven the filter on every pod yet), `Unwired` (after `helm uninstall`) |
+| `Enforced` | Every engine runs a bundle with this policy as it is, and inspection isn't suspended | `EnginesBehind`, `EngineNack`, `EnginesUnreported`, `EnginesOutdated` (an engine before 0.4.0 runs a policy with a 0.4.0 field), `NoEngines`, `Suspended` |
 | `Ready` | All three | `Suspended` while inspection is [suspended](/docs/operations/), else the first failing condition's reason |
 
 `status.bundleVersion` is the first bundle that enforces the policy as it is now; a bundle that

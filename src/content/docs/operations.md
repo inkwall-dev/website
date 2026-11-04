@@ -85,17 +85,21 @@ The operator's metrics include:
 ## Proxy namespaces
 
 The operator recognises a proxy's pods by their labels: Traefik's `app.kubernetes.io/name=traefik`,
-Envoy Gateway's `app.kubernetes.io/name=envoy` and `app.kubernetes.io/managed-by=envoy-gateway`.
+Envoy Gateway's `app.kubernetes.io/name=envoy` and `app.kubernetes.io/managed-by=envoy-gateway`,
+Istio's `gateway.istio.io/managed=istio.io-gateway-controller` (Gateway API) and
+`istio=ingressgateway` (its ingress gateways), and the HAProxy Kubernetes Ingress Controller's
+`app.kubernetes.io/name=kubernetes-ingress`.
 A proxy pod gets the engine, and read access to the policy bundle, which holds every namespace's
 policies and rules. Anyone who may create a pod may give it those labels, so the operator only looks
 for proxy pods in the namespaces of `injection.proxyNamespaces`: `traefik`, `kube-system` (where k3s
-and RKE2 run Traefik) and `envoy-gateway-system` by default. A pod with a proxy's labels anywhere
+and RKE2 run Traefik), `envoy-gateway-system`, `istio-ingress` and `istio-system` (where Istio's docs
+put Gateways) and `haproxy-controller` by default. A pod with a proxy's labels anywhere
 else is an ordinary pod. List only namespaces where only the people who run the proxy create pods.
 
 If your proxy runs in another namespace, list it, with the defaults you still need:
 
 ```sh
-helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.3.2 \
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.4.0 \
   --namespace inkwall-system --reset-then-reuse-values \
   --set 'injection.proxyNamespaces={ingress,envoy-gateway-system}'
 ```
@@ -109,9 +113,10 @@ everyone who may create a pod may read every policy. Changing the value restarts
 
 ## Integration permissions
 
-Each integration's permissions are in a `ClusterRole` of its own, `inkwall-operator-traefik` and
-`inkwall-operator-envoy-gateway`. The chart values `rbac.integrations.traefik` and
-`rbac.integrations.envoyGateway` choose which are granted:
+Each integration's permissions are in a `ClusterRole` of its own: `inkwall-operator-traefik`,
+`inkwall-operator-envoy-gateway`, `inkwall-operator-istio`, `inkwall-operator-istio-ingress` and
+`inkwall-operator-haproxy`. The chart values `rbac.integrations.traefik`, `envoyGateway`, `istio`,
+`istioIngress` and `haproxy` choose which are granted:
 
 - `true`, the default (also when the value is missing, as with `--reuse-values` from 0.2): always
   granted, so a proxy installed after Inkwall is protected;
@@ -124,7 +129,8 @@ The operator checks its permissions when it starts, and every minute. An integra
 of is disabled instead of stalling the others: policies on its proxy's routes report
 `Programmed=False` with reason `IntegrationDisabled`, naming the permissions missing, and
 `InkwallConfig.status.proxies` lists the proxy as `Unsupported`. Without Traefik's role, the Pod
-webhook selects no pod. When a role is granted or revoked, each replica restarts after a random
+webhook selects no Traefik pod; the same goes for Istio's ingress gateway pods without
+`istioIngress`. When a role is granted or revoked, each replica restarts after a random
 delay. Routes wired before an integration was disabled stay wired: unprotect them first.
 
 ## Proxies with other labels
@@ -153,7 +159,7 @@ operator unwires the routes (`SidecarMissing`) until one matches again.
 ## Turning injection off
 
 ```sh
-helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.3.2 \
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.4.0 \
   --namespace inkwall-system --reset-then-reuse-values --set injection.enabled=false
 ```
 
@@ -233,4 +239,4 @@ The CRDs, your `WAFPolicy` objects and the operator's Secrets (the bundle, its c
 key) are kept, so a reinstall continues with the same keys. To remove the Secrets, delete the
 namespace.
 
-More in the [chart README](https://github.com/inkwall-dev/inkwall/tree/v0.3.2/deploy/helm/inkwall).
+More in the [chart README](https://github.com/inkwall-dev/inkwall/tree/v0.4.0/deploy/helm/inkwall).

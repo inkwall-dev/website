@@ -1,6 +1,6 @@
 ---
 title: How it works
-description: The operator and the engine, what happens when inspection fails or the engine is unreachable, scale, and how Traefik and Envoy Gateway talk to the engine.
+description: The operator and the engine, what happens when inspection fails or the engine is unreachable, scale, and how Traefik, Envoy Gateway, Istio and HAProxy talk to the engine.
 order: 3
 ---
 
@@ -11,21 +11,25 @@ down, engines keep enforcing the last policy they received.
 
 ## The operator
 
-In v0.3.2, with Traefik and Envoy Gateway:
+In v0.4.0, with Traefik, Envoy Gateway, Istio and the HAProxy Kubernetes Ingress Controller:
 
 1. **Validates** policies and rule sets when you save them, compiling the rules with the engine's
    own Coraza version.
 2. **Discovers** the proxies: the `InkwallConfig` named `default`, if you create one, lists in
    `status.proxies` the proxy controllers of the cluster's IngressClasses and GatewayClasses, and
    whether Inkwall wires their routes (`Full`, `Partial` or `Unsupported`).
-3. **Injects** the engine as a sidecar: into Traefik's pods when they are created, and into Envoy
-   Gateway's Envoy pods through the Gateway's `EnvoyProxy`, so Envoy Gateway rolls them itself.
-   Only pods in the [proxy namespaces](/docs/operations/) get it.
+3. **Injects** the engine as a sidecar: into Traefik's, Istio's ingress gateways' and the HAProxy
+   controller's pods when they are created; into Envoy Gateway's Envoy pods through the Gateway's
+   `EnvoyProxy`, and into Istio's Gateway pods through the ConfigMap the Gateway names, so Envoy
+   Gateway and Istio roll them themselves. Only pods in the [proxy namespaces](/docs/operations/)
+   get it.
 4. **Wires** each route a policy targets. With Traefik, an `Ingress`, an `IngressRoute` or an
    `HTTPRoute` gets a ForwardAuth middleware that sends every request to the engine first, keeping
    your own middlewares (for an `HTTPRoute`, through an `ExtensionRef` filter). With Envoy Gateway,
    each `HTTPRoute` gets an `EnvoyExtensionPolicy` whose ext_proc filter calls the engine on a
-   Unix socket. It unwires them when the policy is deleted, and when the engine can't be injected
+   Unix socket. With Istio, an `EnvoyFilter` turns ext_proc on for the protected `HTTPRoute` and
+   `VirtualService` routes. With the HAProxy controller, each `Ingress` gets a backend snippet that
+   calls the engine's SPOE agent, and the operator probes every pod to prove it. It unwires them when the policy is deleted, and when the engine can't be injected
    (injection off, or no proxy pod it would inject), so routes are never wired to an engine that
    isn't there.
 5. **Builds a signed bundle** of every policy, and streams it to the engines, which verify the
@@ -60,13 +64,14 @@ only when it changes, up to 8 at a time. At 5,000 policies and 500 engines, a bu
 from 12 s to 0.4 s, and the slowest of 10 policy changes reached every engine in 3.9 to 4.6 s. The operator
 also sets `GOMEMLIMIT` to 90% of its container's memory limit and no longer makes the allocations
 that raised its peak: over 5 runs at that size, its median peak memory went from 472 to 409 MiB,
-under the chart's default 512 MiB limit. The measurements are in the
-[operator design](https://github.com/inkwall-dev/inkwall/blob/v0.3.2/docs/design/0004-operator.md#8-scale-targets-v1).
+under the chart's default 512 MiB limit. In 0.4.0 it ran again with response inspection on, with
+no difference. The measurements are in the
+[operator design](https://github.com/inkwall-dev/inkwall/blob/v0.4.0/docs/design/0004-operator.md#8-scale-targets-v1).
 
 ## The engine
 
-Every proxy integration (forward-auth for Traefik, ext_proc for Envoy Gateway, the check API, the
-reverse proxy) feeds the same pipeline. Cheap checks run first, so most requests never
+Every proxy integration (forward-auth for Traefik, ext_proc for Envoy Gateway, Istio and raw Envoy,
+SPOE for HAProxy, the check API, the reverse proxy) feeds the same pipeline. Cheap checks run first, so most requests never
 reach a regular expression: paths you skip are not inspected, oversized bodies are handled by
 policy, and a bounded number of requests are inspected at once, so overload is answered at once
 instead of queueing. The rules are the OWASP Core Rule Set, run by OWASP Coraza.
@@ -102,6 +107,11 @@ Traefik's ForwardAuth has no setting to let requests through when the engine is 
 change that timeout ([traefik/traefik#9857](https://github.com/traefik/traefik/issues/9857)).
 [Operations](/docs/operations/) covers what keeps such an outage short.
 
+Through Istio, Envoy answers 503 when it can't reach the engine, or 504 for a hung one, in block
+mode. Through the HAProxy controller, HAProxy answers 503 while the engine is down when every policy
+on the Ingress fails closed (`Block` mode by default), and lets requests through uninspected
+otherwise.
+
 Through Envoy Gateway, Envoy answers 500 too when it can't reach the engine, unless every policy on
 the route fails open (`failureMode: Open`, or detect mode without one): then it lets the request
 through uninspected. When those policies are all in detect mode, Envoy doesn't wait for the engine
@@ -126,7 +136,17 @@ Unix socket the two containers share, with Envoy's
 protocol. Envoy holds the request until the engine answers, with its body on routes whose policy
 inspects bodies; an allowed request continues, a denied one gets the engine's answer (403, 413,
 503...). Envoy waits 500 ms longer than the policy's `timeout`, for a hung engine. The engine
-sees the request's real protocol (HTTP/1.1, HTTP/2, HTTP/3).
+sees the request's real protocol (HTTP/1.1, HTTP/2, HTTP/3). For a policy with `responses.inspect`,
+Envoy also sends the app's responses, and holds each until the engine answers: one that leaks is
+replaced with 403 in block mode. That costs about 0.85 ms of engine CPU per KiB of response
+inspected. Istio's Gateways and ingress gateways, and a raw Envoy you configure yourself, call the
+engine the same way; Istio's filter doesn't send responses yet.
+
+**HAProxy SPOE.** HAProxy's Stream Processing Offload Engine sends each request, with as much of
+its body as HAProxy buffers (about 15 KiB by default), to `inkwall-engine spoe`, which answers with
+a verdict that HAProxy's rules act on: 403, 413, 503, or a gRPC status for a gRPC call. The
+operator writes those rules for the HAProxy Kubernetes Ingress Controller; for any other HAProxy,
+you add them to `haproxy.cfg`.
 
 **The check API.** For proxies without a native protocol, `POST /v1/check` takes a description of
 the request, in protobuf or JSON, and returns the verdict.
@@ -139,9 +159,7 @@ request with an absolute-form target (`GET http://host/path`) or an invalid `Hos
 
 ![The engine inspects the request, forwards allowed requests to the app, and answers denied or failed ones itself.](/diagrams/reverse-proxy.svg)
 
-Istio and raw Envoy (`ext_proc`, as with Envoy Gateway) and HAProxy (SPOE) are planned for v0.4.0,
-with response inspection, inspecting gRPC messages (gRPC calls are inspected on their path and
-metadata today, see [gRPC](/docs/grpc/)) and WebSocket messages (handshakes through Envoy
-Gateway are inspected and upgrade since v0.3.2; the messages after them aren't inspected); Caddy (a module) and protecting LLM APIs come later.
-See the [roadmap](/docs/roadmap/). ingress-nginx is retired upstream and not planned: see
+What each proxy inspects (bodies, responses, gRPC messages, WebSocket handshakes and messages) is
+on [Proxies](/docs/proxies/). Caddy (a module) and protecting LLM APIs come later; see the
+[roadmap](/docs/roadmap/). ingress-nginx is retired upstream and not planned: see
 [Migrating from ingress-nginx](/docs/migrating-from-ingress-nginx/).

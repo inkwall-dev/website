@@ -4,15 +4,17 @@ description: Install Inkwall with Helm, protect a Traefik or Envoy Gateway route
 order: 1
 ---
 
-> Inkwall v0.3.2 works with **Traefik**, and its **`Ingress`**, **`IngressRoute`** and Gateway API
-> **`HTTPRoute`** routes, and with **Envoy Gateway** and its `HTTPRoute` routes. You need
-> Kubernetes 1.29 or later, Helm 3, and Traefik or Envoy Gateway in the cluster. The API is
-> `v1alpha1` and will change. Upgrading from 0.2.x? See [Upgrading](/docs/upgrading/).
+> Inkwall v0.4.0 works with **Traefik** (`Ingress`, `IngressRoute` and Gateway API `HTTPRoute`
+> routes), **Envoy Gateway** and **Istio** (`HTTPRoute` routes, and Istio's `VirtualService`
+> routes), and the **HAProxy Kubernetes Ingress Controller** (`Ingress` routes); and, without the
+> operator, with an Envoy or HAProxy you configure yourself. What each one inspects is on
+> [Proxies](/docs/proxies/). You need Kubernetes 1.29 or later and Helm 3. The API is `v1alpha1`
+> and will change. Upgrading from 0.3.x? See [Upgrading](/docs/upgrading/).
 
 ## Install
 
 ```sh
-helm install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.3.2 \
+helm install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.4.0 \
   --namespace inkwall-system --create-namespace
 kubectl -n inkwall-system rollout status deployment/inkwall-operator
 ```
@@ -38,8 +40,11 @@ helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm --version v1.9
   --set config.envoyGateway.extensionApis.enableBackend=true
 ```
 
-Only proxy pods in the chart's proxy namespaces get the engine: `traefik`, `kube-system` and
-`envoy-gateway-system` by default. If your proxy runs elsewhere, list its namespace in
+For Istio (1.28 or later) and the HAProxy Kubernetes Ingress Controller (3.1 or later), see
+[Proxies](/docs/proxies/).
+
+Only proxy pods in the chart's proxy namespaces get the engine: `traefik`, `kube-system`,
+`envoy-gateway-system`, `istio-ingress`, `istio-system` and `haproxy-controller` by default. If your proxy runs elsewhere, list its namespace in
 `injection.proxyNamespaces`, e.g. `--set 'injection.proxyNamespaces={ingress,envoy-gateway-system}'`;
 see [Operations](/docs/operations/).
 
@@ -59,7 +64,7 @@ spec:
   mode: Block   # the default, Detect, logs and never blocks
 ```
 
-For an `HTTPRoute`, served by Traefik or Envoy Gateway, target it with its group, and optionally
+For an `HTTPRoute`, served by Traefik, Envoy Gateway or Istio, target it with its group, and optionally
 one of its rules: `{group: gateway.networking.k8s.io, kind: HTTPRoute, name: web, sectionName: api}`.
 One policy can target routes of both proxies. Traefik wires an HTTPRoute only when every Gateway
 it is attached to is Traefik's, so give each proxy its own HTTPRoute.
@@ -89,7 +94,7 @@ Images, the chart and the binaries' checksums are signed keyless with cosign, fr
 workflow. Verify them with cosign v3 or later: cosign v2 reports `no signatures found`.
 
 ```sh
-cosign verify ghcr.io/inkwall-dev/inkwall-engine:0.3.2 \
+cosign verify ghcr.io/inkwall-dev/inkwall-engine:0.4.0 \
   --certificate-identity-regexp '^https://github.com/inkwall-dev/inkwall/\.github/workflows/release\.yaml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
@@ -118,6 +123,9 @@ Main flags (`inkwall-engine proxy -h` for all):
 | `--rules`, `--rules-before-crs` | | Your SecLang rules and exclusions, loaded after or before CRS |
 | `--skip-paths`, `--skip-body-paths` | | Paths not inspected at all, or without their body, e.g. `/healthz,/static/*` |
 | `--disable-rule-groups` | | CRS attack families the app can't be vulnerable to, e.g. `php,java` |
+| `--websocket-origins`, `--websocket-required-headers` | | Origins a WebSocket handshake may come from, headers it must have |
+| `--websocket-messages` | `off` | `inspect` or `text-only`: inspect each text message a client sends on a WebSocket; a denied one closes it with 1008 |
+| `--grpc-messages` | `skip` | `inspect`: read the text in gRPC messages ([gRPC](/docs/grpc/)) |
 | `--max-body-bytes` | `65536` | Body bytes inspected |
 | `--failure-mode` | `auto` | Uninspectable requests: closed in block mode, open in detect mode |
 | `--trusted-proxies` | | CIDRs whose `X-Forwarded-For` is trusted |
@@ -126,9 +134,9 @@ Main flags (`inkwall-engine proxy -h` for all):
 Each blocked or detected request logs one JSON line with the rule IDs; metrics are on
 `:9480/metrics`. The proxy accepts only origin-form request targets (`GET /path`): an absolute-form
 target (`GET http://host/path`) or an invalid `Host` gets a 400. The guide,
-[running the engine without Kubernetes](https://github.com/inkwall-dev/inkwall/blob/v0.3.2/docs/standalone-proxy.md),
-also covers the engine's `forward-auth`, `check` and `ext-proc` modes (Envoy's external
-processing API over gRPC).
+[running the engine without Kubernetes](https://github.com/inkwall-dev/inkwall/blob/v0.4.0/docs/standalone-proxy.md),
+also covers the engine's `forward-auth`, `check`, `ext-proc` (Envoy's external processing API over
+gRPC) and `spoe` (HAProxy's SPOE) modes; see [Proxies](/docs/proxies/).
 
 ## Try it locally
 

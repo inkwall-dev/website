@@ -16,7 +16,11 @@ const features = [
   },
   {
     title: 'Policy as Kubernetes objects',
-    body: 'Write a WAFPolicy against an Ingress, IngressRoute or Gateway API HTTPRoute. Rules are compiled when you save them, so a typo is a kubectl error with a line number, not an outage.',
+    body: 'Write a WAFPolicy against an Ingress, IngressRoute, Gateway API HTTPRoute or Istio VirtualService. Rules are compiled when you save them, so a typo is a kubectl error with a line number, not an outage.',
+  },
+  {
+    title: 'Responses, gRPC and WebSockets',
+    body: 'Inspect what the app answers for data leaks, through Envoy Gateway. Read the text in gRPC messages, and answer a denied call with a gRPC status. Allow WebSocket handshakes only from your own origins.',
   },
   {
     title: 'Test rules without traffic',
@@ -36,11 +40,12 @@ type State = 'works' | 'progress' | 'planned';
 const integrations: { name: string; hook: string; state: State; note: string }[] = [
   { name: 'Standalone reverse proxy', hook: 'HTTP', state: 'works', note: 'In front of any HTTP service, in or out of Kubernetes' },
   { name: 'Traefik', hook: 'ForwardAuth', state: 'works', note: 'Since v0.1.0; the operator injects the engine and wires Ingress, IngressRoute and, since v0.3.0, Gateway API HTTPRoute routes' },
-  { name: 'Envoy Gateway (Gateway API)', hook: 'ext_proc', state: 'works', note: 'Since v0.3.0, with Envoy Gateway v1.9: the engine joins the Envoy pods, and each protected HTTPRoute calls it over ext_proc' },
+  { name: 'Envoy Gateway (Gateway API)', hook: 'ext_proc', state: 'works', note: 'Since v0.3.0, with Envoy Gateway v1.9: the engine joins the Envoy pods, and each protected HTTPRoute calls it over ext_proc; since v0.4.0, responses too' },
+  { name: 'Istio', hook: 'ext_proc', state: 'works', note: 'Since v0.4.0, Istio 1.28 or later: HTTPRoutes of its Gateways, and VirtualServices of its ingress gateways' },
+  { name: 'HAProxy Kubernetes Ingress Controller', hook: 'SPOE', state: 'works', note: 'Since v0.4.0, 3.1 or later: the operator injects the engine and wires its Ingresses' },
+  { name: 'Raw Envoy, HAProxy', hook: 'ext_proc, SPOE', state: 'works', note: 'Since v0.4.0: an Envoy or HAProxy you configure yourself calls the engine' },
   { name: 'Any proxy with a hook', hook: 'POST /v1/check', state: 'works', note: 'The engine’s own API, protobuf or JSON' },
   { name: 'Kubernetes operator', hook: 'CRDs', state: 'works', note: 'Validation, signed bundles with key rotation, injection, wiring, proxy discovery and status; a role per integration; per-policy request counts; scale-tested with 5,000 policies and 500 fake engines at a median peak of 409 MiB; Helm chart on GHCR' },
-  { name: 'Istio, raw Envoy', hook: 'ext_proc', state: 'planned', note: 'v0.4.0' },
-  { name: 'HAProxy', hook: 'SPOE', state: 'planned', note: 'v0.4.0' },
   { name: 'Caddy', hook: 'Module', state: 'planned', note: '' },
 ];
 const label: Record<State, string> = { works: 'Works today', progress: 'Next', planned: 'Planned' };
@@ -51,7 +56,7 @@ const label: Record<State, string> = { works: 'Works today', progress: 'Next', p
 >
   <section class="hero">
     <div class="container">
-      <p class="status"><span class="dot" aria-hidden="true"></span> v0.3.2 is out: WebSockets work through Envoy Gateway</p>
+      <p class="status"><span class="dot" aria-hidden="true"></span> v0.4.0 is out: Istio, HAProxy, raw Envoy, and response inspection</p>
       <h1>One web application firewall for every ingress in your cluster</h1>
       <p class="sub">
         Inkwall protects HTTP traffic behind any proxy with the same policy. Write a <code>WAFPolicy</code>,
@@ -93,7 +98,7 @@ const label: Record<State, string> = { works: 'Works today', progress: 'Next', p
         alt="Clients reach the proxy, which asks the inkwall-engine sidecar for a verdict before forwarding allowed requests to services. The operator watches policies and routes and pushes signed policy bundles to the engine."
       />
       </div>
-      <figcaption><a href="/diagrams/system-overview.svg">The architecture</a>. Today the proxy is Traefik or Envoy Gateway; Istio, raw Envoy and HAProxy are planned for v0.4.0.</figcaption>
+      <figcaption><a href="/diagrams/system-overview.svg">The architecture</a>. The proxy is Traefik, Envoy Gateway, Istio or HAProxy, or an Envoy or HAProxy you configure yourself.</figcaption>
     </figure>
   </section>
 
@@ -137,14 +142,14 @@ const label: Record<State, string> = { works: 'Works today', progress: 'Next', p
         <h2>Install in a minute</h2>
         <p>
           Install the operator with Helm, restart Traefik so its pods get the engine, then attach a
-          <code>WAFPolicy</code> to an Ingress, IngressRoute or HTTPRoute. With Envoy Gateway, nothing to restart: it
-          rolls its Envoy pods itself. Policies start in detect mode; <code>mode: Block</code> enforces.
+          <code>WAFPolicy</code> to an Ingress, IngressRoute or HTTPRoute. With Envoy Gateway or Istio's Gateways, nothing to
+          restart: they roll their pods themselves. Policies start in detect mode; <code>mode: Block</code> enforces.
         </p>
         <p><a href="/docs/getting-started/">Getting started</a> walks through it, and covers the engine on its own, without Kubernetes.</p>
       </div>
       <pre><code>$ helm install inkwall \
     oci://ghcr.io/inkwall-dev/charts/inkwall \
-    --version 0.3.2 \
+    --version 0.4.0 \
     -n inkwall-system --create-namespace
 $ kubectl get wafpolicy -n shop
 NAME   MODE    READY   BUNDLE   AGE

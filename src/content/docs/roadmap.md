@@ -1,6 +1,6 @@
 ---
 title: Roadmap
-description: What v0.3.0, v0.3.1 and v0.3.2 ship, and what the next milestones bring.
+description: What each release ships, from v0.1.0 to v0.4.0, and what the next milestones bring.
 order: 11
 ---
 
@@ -86,7 +86,7 @@ The milestone ([release post](/blog/inkwall-v0-3-0/)):
   annotations to `WAFPolicy`, also onto the `HTTPRoute` or `IngressRoute` objects replacing the
   Ingresses, and testing policies that target `IngressRoute` and `HTTPRoute` objects.
 
-## v0.3.2: WebSockets through Envoy, today
+## v0.3.2: WebSockets through Envoy
 
 A fix-only patch release ([release post](/blog/inkwall-v0-3-2/)): WebSocket handshakes through
 Envoy Gateway are decided on their headers and upgrade, instead of being held until a timeout
@@ -104,17 +104,22 @@ A patch release ([release post](/blog/inkwall-v0-3-1/)):
 - Suspending works when the bundle is too large; `helm uninstall` leaves nothing behind; a
   `version` command in `inkwallctl`, `inkwall-engine` and `inkwall-operator`.
 
-## v0.4.0: more proxies, next
+## v0.4.0: more proxies, responses, gRPC and WebSockets
 
-The [milestone](https://github.com/inkwall-dev/inkwall/milestone/12):
+The milestone ([release post](/blog/inkwall-v0-4-0/)):
 
-- Istio ([#281](https://github.com/inkwall-dev/inkwall/issues/281)) and raw Envoy
-  ([#283](https://github.com/inkwall-dev/inkwall/issues/283)), through the same `ext_proc` adapter
-  as Envoy Gateway.
-- HAProxy, through an SPOE agent ([#282](https://github.com/inkwall-dev/inkwall/issues/282)).
-- Response inspection, not only requests ([#274](https://github.com/inkwall-dev/inkwall/issues/274)).
-- Fuller gRPC support, reading the messages ([#275](https://github.com/inkwall-dev/inkwall/issues/275)), and WebSocket
-  ([#276](https://github.com/inkwall-dev/inkwall/issues/276)) support.
+- [Istio](/docs/proxies/): the `HTTPRoute` routes of its Gateways, and its
+  `VirtualService` routes through its ingress gateways, over the same `ext_proc` adapter as Envoy
+  Gateway.
+- HAProxy, through an SPOE agent (`inkwall-engine spoe`), and the HAProxy Kubernetes Ingress
+  Controller wired by the operator, `Programmed` only once a probe has proven the filter on every
+  pod.
+- Raw Envoy: an Envoy you configure yourself calls the engine's `ext_proc` adapter.
+- Response inspection through Envoy Gateway, for data leaks ([Policies](/docs/policies/)).
+- [gRPC](/docs/grpc/): the text in the messages, opt-in; a gRPC status on a denial; gRPC-Web text.
+- WebSocket: handshake rules (allowed origins, required headers) through every proxy, and the
+  messages inspected by the engine's own reverse proxy ([Proxies](/docs/proxies/)).
+- Status says when an engine is too old for a policy's fields (`EnginesOutdated`).
 
 ## v1.0.0: a stable API
 
@@ -122,6 +127,10 @@ The CRDs out of `v1alpha1`, with an upgrade path and a compatibility promise.
 
 ## Later
 
+- WebSocket messages through Envoy (Envoy Gateway, Istio, raw Envoy), which needs a change in
+  Envoy's `ext_proc` ([#313](https://github.com/inkwall-dev/inkwall/issues/313)).
+- Responses through Traefik and Istio, and streamed responses
+  ([#323](https://github.com/inkwall-dev/inkwall/issues/323)).
 - Protecting LLM APIs against the OWASP Top 10 for LLM applications
   ([#277](https://github.com/inkwall-dev/inkwall/issues/277)).
 - Caddy (a module).
