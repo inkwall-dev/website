@@ -1,6 +1,6 @@
 ---
 title: Upgrading
-description: Upgrade from 0.4.0 to 0.4.1, from 0.3.2 to 0.3.3, from 0.3.x to 0.4.0, from 0.3.1 to 0.3.2, from 0.3.0 to 0.3.1, and from 0.2.x to 0.3.0, what to check first, what changes by itself, protecting HTTPRoutes, and how to roll back.
+description: Upgrade from 0.4.0 to 0.4.1, from 0.3.2 to 0.3.3, from 0.2.2 to 0.2.3, from 0.3.x to 0.4.0, from 0.3.1 to 0.3.2, from 0.3.0 to 0.3.1, and from 0.2.x to 0.3.0, what to check first, what changes by itself, protecting HTTPRoutes, and how to roll back.
 order: 2
 ---
 
@@ -9,7 +9,9 @@ The latest release is **0.4.1**, a security patch release for 0.4; **0.3.3** is 
 0.4.1, with `--version 0.4.1` in the commands of [From 0.3.x to 0.4.0](#from-03x-to-040), and read
 both sections; to stay on 0.3, upgrade to 0.3.3 as in [From 0.3.2 to 0.3.3](#from-032-to-033).
 From any 0.2 release, upgrade to 0.3.0 first, as in
-[From 0.2.x to 0.3.0](#from-02x-to-030). From 0.1.x, upgrade to 0.2.2 first, then to 0.3.0. The
+[From 0.2.x to 0.3.0](#from-02x-to-030); to stay on 0.2, upgrade to 0.2.3, a security patch
+release, as in [From 0.2.2 to 0.2.3](#from-022-to-023). From 0.1.x, upgrade to 0.2.3 first, then
+to 0.3.0. The
 full guide is
 [`docs/upgrading.md`](https://github.com/inkwall-dev/inkwall/blob/v0.4.1/docs/upgrading.md).
 
@@ -50,6 +52,31 @@ What changes by itself:
 which 0.3 doesn't have: upgrade the chart as for 0.3.0, with `--version 0.3.3`, then restart Traefik
 and the Envoy Gateway proxies so their engines are 0.3.3. What changes by itself is as in
 [From 0.4.0 to 0.4.1](#from-040-to-041), without the item on upgrade requests.
+
+## From 0.2.2 to 0.2.3
+
+0.2.3 is a patch release with security fixes for 0.2: upgrade the chart as for 0.2.2, with
+`--version 0.2.3`, then restart Traefik so its engine is 0.2.3:
+
+```sh
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.2.3 \
+  --namespace inkwall-system --reset-then-reuse-values
+kubectl -n inkwall-system rollout status deployment/inkwall-operator
+kubectl -n <traefik namespace> rollout restart deployment/<traefik>
+```
+
+What changes by itself:
+
+- **Rule sets can't use `@inspectFile` or `@rbl`.** These operators reach outside the engine (a
+  program, a DNS query). The webhook and the operator reject rule sets that use them, and the
+  engine never runs them. A rule set that already uses them keeps loading, but those rules never
+  match, and editing it is rejected until they are removed. Look for them in your rule sets.
+- **Path exclusions apply only to plain paths.** An exclusion with a `path` now applies only to a
+  request path that is plain ASCII, without `%`, `;`, `\`, `//` or `.` and `..` segments, as skip
+  paths already did. A request with any other path gets the policy's rules without that exclusion.
+
+The 0.2 line's full guide is
+[`docs/upgrading.md` at v0.2.3](https://github.com/inkwall-dev/inkwall/blob/v0.2.3/docs/upgrading.md).
 
 ## From 0.3.x to 0.4.0
 

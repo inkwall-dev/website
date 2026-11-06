@@ -121,23 +121,23 @@ The milestone ([release post](/blog/inkwall-v0-4-0/)):
   messages inspected by the engine's own reverse proxy ([Proxies](/docs/proxies/)).
 - Status says when an engine is too old for a policy's fields (`EnginesOutdated`).
 
-## v0.4.1 and v0.3.3: security fixes
+## v0.4.1, v0.3.3 and v0.2.3: security fixes
 
-Security releases for the 0.4 and 0.3 lines ([release post](/blog/inkwall-v0-4-1-and-v0-3-3/)):
+Security releases for the 0.4, 0.3 and 0.2 lines ([release post](/blog/inkwall-v0-4-1-and-v0-3-3/)):
 
 - [GHSA-xw38-cv4f-qp3p](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-xw38-cv4f-qp3p)
-  (high, both): a rule set could use SecLang operators that run a program (`@inspectFile`) or make
+  (high, all three): a rule set could use SecLang operators that run a program (`@inspectFile`) or make
   a DNS query (`@rbl`) in the shared engine. Both are now rejected, and never run.
 - [GHSA-5hq9-fpvm-jrpq](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-5hq9-fpvm-jrpq)
   (medium, 0.4.1): through ext_proc, the response to a request asking for a WebSocket upgrade
   skipped response inspection when the upstream answered with an ordinary response.
 - [GHSA-3rgj-wvpm-3rrp](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-3rgj-wvpm-3rrp)
-  (low, both): path exclusions applied to ambiguous request paths that a backend may route outside
+  (low, all three): path exclusions applied to ambiguous request paths that a backend may route outside
   the excluded prefix.
 - [GHSA-rjqr-wjvm-f27f](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-rjqr-wjvm-f27f)
-  (low, both): the standalone proxy inspected headers that it then didn't forward.
+  (low, 0.4.1 and 0.3.3): the standalone proxy inspected headers that it then didn't forward.
 
-Both also set the engine's Go memory limit from its container's, and keep only the inspected part of
+0.4.1 and 0.3.3 also set the engine's Go memory limit from its container's, and keep only the inspected part of
 a large body through ext_proc.
 
 ## v1.0.0: a stable API
