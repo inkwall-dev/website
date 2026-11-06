@@ -4,7 +4,7 @@ description: Install Inkwall with Helm, protect a Traefik or Envoy Gateway route
 order: 1
 ---
 
-> Inkwall v0.4.0 works with **Traefik** (`Ingress`, `IngressRoute` and Gateway API `HTTPRoute`
+> Inkwall v0.4.1 works with **Traefik** (`Ingress`, `IngressRoute` and Gateway API `HTTPRoute`
 > routes), **Envoy Gateway** and **Istio** (`HTTPRoute` routes, and Istio's `VirtualService`
 > routes), and the **HAProxy Kubernetes Ingress Controller** (`Ingress` routes); and, without the
 > operator, with an Envoy or HAProxy you configure yourself. What each one inspects is on
@@ -14,7 +14,7 @@ order: 1
 ## Install
 
 ```sh
-helm install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.4.0 \
+helm install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.4.1 \
   --namespace inkwall-system --create-namespace
 kubectl -n inkwall-system rollout status deployment/inkwall-operator
 ```
@@ -94,7 +94,7 @@ Images, the chart and the binaries' checksums are signed keyless with cosign, fr
 workflow. Verify them with cosign v3 or later: cosign v2 reports `no signatures found`.
 
 ```sh
-cosign verify ghcr.io/inkwall-dev/inkwall-engine:0.4.0 \
+cosign verify ghcr.io/inkwall-dev/inkwall-engine:0.4.1 \
   --certificate-identity-regexp '^https://github.com/inkwall-dev/inkwall/\.github/workflows/release\.yaml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
@@ -134,7 +134,7 @@ Main flags (`inkwall-engine proxy -h` for all):
 Each blocked or detected request logs one JSON line with the rule IDs; metrics are on
 `:9480/metrics`. The proxy accepts only origin-form request targets (`GET /path`): an absolute-form
 target (`GET http://host/path`) or an invalid `Host` gets a 400. The guide,
-[running the engine without Kubernetes](https://github.com/inkwall-dev/inkwall/blob/v0.4.0/docs/standalone-proxy.md),
+[running the engine without Kubernetes](https://github.com/inkwall-dev/inkwall/blob/v0.4.1/docs/standalone-proxy.md),
 also covers the engine's `forward-auth`, `check`, `ext-proc` (Envoy's external processing API over
 gRPC) and `spoe` (HAProxy's SPOE) modes; see [Proxies](/docs/proxies/).
 

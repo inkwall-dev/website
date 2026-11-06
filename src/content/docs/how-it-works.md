@@ -11,7 +11,7 @@ down, engines keep enforcing the last policy they received.
 
 ## The operator
 
-In v0.4.0, with Traefik, Envoy Gateway, Istio and the HAProxy Kubernetes Ingress Controller:
+In v0.4.1, with Traefik, Envoy Gateway, Istio and the HAProxy Kubernetes Ingress Controller:
 
 1. **Validates** policies and rule sets when you save them, compiling the rules with the engine's
    own Coraza version.
@@ -66,7 +66,7 @@ also sets `GOMEMLIMIT` to 90% of its container's memory limit and no longer make
 that raised its peak: over 5 runs at that size, its median peak memory went from 472 to 409 MiB,
 under the chart's default 512 MiB limit. In 0.4.0 it ran again with response inspection on, with
 no difference. The measurements are in the
-[operator design](https://github.com/inkwall-dev/inkwall/blob/v0.4.0/docs/design/0004-operator.md#8-scale-targets-v1).
+[operator design](https://github.com/inkwall-dev/inkwall/blob/v0.4.1/docs/design/0004-operator.md#8-scale-targets-v1).
 
 ## The engine
 

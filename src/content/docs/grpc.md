@@ -8,7 +8,7 @@ gRPC calls are inspected on their path, query and metadata, through every proxy.
 policy can have the text in their messages inspected too, a denied call is answered as gRPC
 (status 7, `PERMISSION_DENIED`), and gRPC-Web text calls are inspected as gRPC calls. Before
 v0.3.1, the Core Rule Set denied every gRPC call in `Block` mode and logged it in `Detect` mode. The
-full guide is [`docs/grpc.md`](https://github.com/inkwall-dev/inkwall/blob/v0.4.0/docs/grpc.md).
+full guide is [`docs/grpc.md`](https://github.com/inkwall-dev/inkwall/blob/v0.4.1/docs/grpc.md).
 
 ## Which requests are gRPC calls
 

@@ -56,7 +56,7 @@ const label: Record<State, string> = { works: 'Works today', progress: 'Next', p
 >
   <section class="hero">
     <div class="container">
-      <p class="status"><span class="dot" aria-hidden="true"></span> v0.4.0 is out: Istio, HAProxy, raw Envoy, and response inspection</p>
+      <p class="status"><span class="dot" aria-hidden="true"></span> v0.4.1 and v0.3.3 are out: security fixes</p>
       <h1>One web application firewall for every ingress in your cluster</h1>
       <p class="sub">
         Inkwall protects HTTP traffic behind any proxy with the same policy. Write a <code>WAFPolicy</code>,
@@ -149,7 +149,7 @@ const label: Record<State, string> = { works: 'Works today', progress: 'Next', p
       </div>
       <pre><code>$ helm install inkwall \
     oci://ghcr.io/inkwall-dev/charts/inkwall \
-    --version 0.4.0 \
+    --version 0.4.1 \
     -n inkwall-system --create-namespace
 $ kubectl get wafpolicy -n shop
 NAME   MODE    READY   BUNDLE   AGE

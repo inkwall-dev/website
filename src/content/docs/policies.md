@@ -45,7 +45,7 @@ spec:
 | `timeout` | Inspection deadline per request, more than 0 and at most 1s |
 | `skip.paths`, `skip.bodyPaths` | Paths never inspected, or whose body isn't; exact (`/healthz`) or prefix (`/static/*`) |
 | `ruleSets` | The rules to run, in order; with no entry, the Core Rule Set with its defaults |
-| `exclusions` | Rule IDs to turn off, everywhere or for a path, an argument or both |
+| `exclusions` | Rule IDs to turn off, everywhere or for a path, an argument or both. Since 0.4.1 and 0.3.3, an exclusion with a `path` applies only to a plain path (ASCII, without `%`, `;`, `\`, `//` or `.` and `..` segments), as skip paths do |
 | `body` | Whether bodies are inspected, how much of them, and what happens to larger ones; `grpcMessages: Inspect` reads the text in gRPC messages ([gRPC](/docs/grpc/)) |
 | `responses` | Whether the app's responses are inspected too, for data leaks ([below](#responses)) |
 | `webSocket` | The origins a WebSocket handshake may come from, and the headers it must have ([below](#websocket-handshakes)) |
@@ -96,7 +96,7 @@ the bundle, but not wired (`ControllerUnsupported`). The proxy needs the Gateway
 - **Istio** (1.28 or later): its Gateway API implementation (on by default) and the Gateway API
   CRDs. The operator adds the engine to a Gateway's pods through the ConfigMap the Gateway names,
   and an `EnvoyFilter` sends the protected routes to it
-  ([Istio](https://github.com/inkwall-dev/inkwall/blob/v0.4.0/docs/istio.md)).
+  ([Istio](https://github.com/inkwall-dev/inkwall/blob/v0.4.1/docs/istio.md)).
 
 ### VirtualService targets
 
@@ -113,7 +113,7 @@ route's `uri` (`exact` or `prefix`) and `method` (`exact`) matches; anything els
 `headers`, `queryParams`, a `delegate`, a short mesh host name) is refused (`TargetUnsupported`).
 The ingress gateway's pods (labelled `istio: ingressgateway`) get the engine from the Pod webhook
 when they are created: restart those that ran before Inkwall. See
-[VirtualServices](https://github.com/inkwall-dev/inkwall/blob/v0.4.0/docs/istio.md#virtualservices).
+[VirtualServices](https://github.com/inkwall-dev/inkwall/blob/v0.4.1/docs/istio.md#virtualservices).
 
 ### Responses
 
@@ -132,7 +132,7 @@ Envoy Gateway sends responses to the engine: on a Traefik or Istio route, such a
 `Programmed=False` (`ResponsesNotInspected`), naming the routes, while their requests are still
 inspected. It costs about 0.85 ms of engine CPU per KiB of response, so a route of large HTML pages
 is CPU-bound in the engine: raise `timeout` with `maxBytes`, and measure first
-([response inspection](https://github.com/inkwall-dev/inkwall/blob/v0.4.0/docs/design/0006-adapter-protocols.md#response-inspection-v040)).
+([response inspection](https://github.com/inkwall-dev/inkwall/blob/v0.4.1/docs/design/0006-adapter-protocols.md#response-inspection-v040)).
 
 ### WebSocket handshakes
 
@@ -150,7 +150,7 @@ gets 403 before the upgrade in `Block` mode, and is logged with reason `websocke
 mode. `allowMissingOrigin: true` lets a client that sends no `Origin` through. The handshake's URL
 and headers are inspected by the rules through every proxy; the messages after the upgrade are not,
 except by the engine's own reverse proxy
-([WebSocket](https://github.com/inkwall-dev/inkwall/blob/v0.4.0/docs/websocket.md)).
+([WebSocket](https://github.com/inkwall-dev/inkwall/blob/v0.4.1/docs/websocket.md)).
 
 ### Engines before 0.4.0
 
@@ -202,7 +202,12 @@ failed to compile the directive "secrule": operator nosuchop not found
 Rule sets may only use directives that add, remove or change rules (`SecRule`, `SecAction`,
 `SecMarker`, `SecRuleRemoveBy*`, `SecRuleUpdate*`). Settings that change the whole engine, such as
 `SecRuleEngine`, or that write files, such as `SecAuditLog`, are rejected: rule sets are written by
-application teams, and those settings belong to the platform.
+application teams, and those settings belong to the platform. Since 0.4.1 and 0.3.3, rules may
+only use operators that stay inside the engine: `@inspectFile`, which runs a program, and `@rbl`,
+which makes a DNS query, are rejected, and the engine never runs them
+([GHSA-xw38-cv4f-qp3p](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-xw38-cv4f-qp3p)).
+A rule set that already used them keeps loading, but those rules never match, and editing it is
+rejected until they are removed.
 
 ## Status
 

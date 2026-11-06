@@ -99,7 +99,7 @@ else is an ordinary pod. List only namespaces where only the people who run the 
 If your proxy runs in another namespace, list it, with the defaults you still need:
 
 ```sh
-helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.4.0 \
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.4.1 \
   --namespace inkwall-system --reset-then-reuse-values \
   --set 'injection.proxyNamespaces={ingress,envoy-gateway-system}'
 ```
@@ -159,7 +159,7 @@ operator unwires the routes (`SidecarMissing`) until one matches again.
 ## Turning injection off
 
 ```sh
-helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.4.0 \
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.4.1 \
   --namespace inkwall-system --reset-then-reuse-values --set injection.enabled=false
 ```
 
@@ -239,4 +239,4 @@ The CRDs, your `WAFPolicy` objects and the operator's Secrets (the bundle, its c
 key) are kept, so a reinstall continues with the same keys. To remove the Secrets, delete the
 namespace.
 
-More in the [chart README](https://github.com/inkwall-dev/inkwall/tree/v0.4.0/deploy/helm/inkwall).
+More in the [chart README](https://github.com/inkwall-dev/inkwall/tree/v0.4.1/deploy/helm/inkwall).
