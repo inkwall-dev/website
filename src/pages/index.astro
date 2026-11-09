@@ -19,16 +19,24 @@ const features = [
     body: 'Write a WAFPolicy against an Ingress, IngressRoute, Gateway API HTTPRoute or Istio VirtualService. Rules are compiled when you save them, so a typo is a kubectl error with a line number, not an outage.',
   },
   {
+    title: 'Tuning without SecLang',
+    body: 'Set the Core Rule Set’s allowed methods and content types on the policy, exclude a rule for one argument, cookie or header, and deny or allow clients by IP list. inkwallctl tune suggests the narrowest exclusions from detect mode’s events.',
+  },
+  {
     title: 'Responses, gRPC and WebSockets',
-    body: 'Inspect what the app answers for data leaks, through Envoy Gateway. Read the text in gRPC messages, and answer a denied call with a gRPC status. Allow WebSocket handshakes only from your own origins.',
+    body: 'Inspect what the app answers for data leaks, through Envoy Gateway and Istio. Read the text in gRPC messages, and answer a denied call with a gRPC status. Allow WebSocket handshakes only from your own origins.',
   },
   {
     title: 'Test rules without traffic',
-    body: 'inkwallctl test shows the verdict and matching rules for a request, a raw HTTP file or a browser HAR, against your WAFPolicy files and their Ingress, IngressRoute or HTTPRoute objects, or the cluster’s bundle, and works as a CI check.',
+    body: 'inkwallctl test shows the verdict and matching rules for a request, a raw HTTP file or a browser HAR, against your WAFPolicy files and their Ingress, IngressRoute or HTTPRoute objects, or the cluster’s bundle, and works as a CI check. Test suites keep the cases and their expected verdicts in one file, with JUnit output.',
   },
   {
     title: 'Leaving ingress-nginx',
     body: 'inkwallctl migrate ingress-nginx turns its ModSecurity annotations and ConfigMap settings into WAFPolicy objects, for the Ingresses or the HTTPRoutes and IngressRoutes replacing them, and lists what needs a human.',
+  },
+  {
+    title: 'See what happens',
+    body: 'inkwallctl status checks the whole cluster. Each security event says which rule matched where, never the value. Alerts and a Grafana dashboard come with the chart, off by default, and health checks let Argo CD and Flux wait for a policy to be Ready.',
   },
   {
     title: 'GitOps first, SaaS optional',
@@ -41,11 +49,11 @@ const integrations: { name: string; hook: string; state: State; note: string }[]
   { name: 'Standalone reverse proxy', hook: 'HTTP', state: 'works', note: 'In front of any HTTP service, in or out of Kubernetes' },
   { name: 'Traefik', hook: 'ForwardAuth', state: 'works', note: 'Since v0.1.0; the operator injects the engine and wires Ingress, IngressRoute and, since v0.3.0, Gateway API HTTPRoute routes' },
   { name: 'Envoy Gateway (Gateway API)', hook: 'ext_proc', state: 'works', note: 'Since v0.3.0, with Envoy Gateway v1.9: the engine joins the Envoy pods, and each protected HTTPRoute calls it over ext_proc; since v0.4.0, responses too' },
-  { name: 'Istio', hook: 'ext_proc', state: 'works', note: 'Since v0.4.0, Istio 1.28 or later: HTTPRoutes of its Gateways, and VirtualServices of its ingress gateways' },
+  { name: 'Istio', hook: 'ext_proc', state: 'works', note: 'Since v0.4.0, Istio 1.28 or later: HTTPRoutes of its Gateways, and VirtualServices of its ingress gateways, proven by the operator’s probe; since v0.5.0, responses too' },
   { name: 'HAProxy Kubernetes Ingress Controller', hook: 'SPOE', state: 'works', note: 'Since v0.4.0, 3.1 or later: the operator injects the engine and wires its Ingresses' },
   { name: 'Raw Envoy, HAProxy', hook: 'ext_proc, SPOE', state: 'works', note: 'Since v0.4.0: an Envoy or HAProxy you configure yourself calls the engine' },
   { name: 'Any proxy with a hook', hook: 'POST /v1/check', state: 'works', note: 'The engine’s own API, protobuf or JSON' },
-  { name: 'Kubernetes operator', hook: 'CRDs', state: 'works', note: 'Validation, signed bundles with key rotation, injection, wiring, proxy discovery and status; a role per integration; per-policy request counts; scale-tested with 5,000 policies and 500 fake engines at a median peak of 409 MiB; Helm chart on GHCR' },
+  { name: 'Kubernetes operator', hook: 'CRDs', state: 'works', note: 'Validation, signed bundles with key rotation, injection, wiring, proxy discovery and status; a role per integration; an opt-in automatic engine rollout; per-policy request counts; scale-tested with 5,000 policies and 500 fake engines at a median peak of 409 MiB; Helm chart on GHCR' },
   { name: 'Caddy', hook: 'Module', state: 'planned', note: '' },
 ];
 const label: Record<State, string> = { works: 'Works today', progress: 'Next', planned: 'Planned' };
@@ -56,7 +64,7 @@ const label: Record<State, string> = { works: 'Works today', progress: 'Next', p
 >
   <section class="hero">
     <div class="container">
-      <p class="status"><span class="dot" aria-hidden="true"></span> v0.4.1, v0.3.3 and v0.2.3 are out: security fixes</p>
+      <p class="status"><span class="dot" aria-hidden="true"></span> v0.5.0 is out: tuning, IP lists, responses through Istio, and monitoring</p>
       <h1>One web application firewall for every ingress in your cluster</h1>
       <p class="sub">
         Inkwall protects HTTP traffic behind any proxy with the same policy. Write a <code>WAFPolicy</code>,
@@ -149,11 +157,11 @@ const label: Record<State, string> = { works: 'Works today', progress: 'Next', p
       </div>
       <pre><code>$ helm install inkwall \
     oci://ghcr.io/inkwall-dev/charts/inkwall \
-    --version 0.4.1 \
+    --version 0.5.0 \
     -n inkwall-system --create-namespace
 $ kubectl get wafpolicy -n shop
-NAME   MODE    READY   BUNDLE   AGE
-web    Block   True    2        3s</code></pre>
+NAME   MODE    READY   REASON   BUNDLE   AGE
+web    Block   True    Ready    2        3s</code></pre>
     </div>
   </section>
 </Base>

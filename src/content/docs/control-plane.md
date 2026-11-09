@@ -6,9 +6,9 @@ order: 10
 
 A cluster can connect to an optional control plane, a separate service that sees many clusters in
 one place. This repository holds only the cluster side: the operator's client and the protocol,
-[`api/controlplane/v1`](https://github.com/inkwall-dev/inkwall/blob/v0.4.1/api/controlplane/v1/controlplane.proto).
+[`api/controlplane/v1`](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/api/controlplane/v1/controlplane.proto).
 The full guide is
-[`docs/control-plane.md`](https://github.com/inkwall-dev/inkwall/blob/v0.4.1/docs/control-plane.md).
+[`docs/control-plane.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/control-plane.md).
 
 - **Enforcement never depends on it.** Engines enforce the bundle the operator signs with the
   cluster's own key. If the connection drops, traffic is unaffected.
@@ -35,7 +35,7 @@ certificate if it isn't from a public CA, and egress from `inkwall-system` to th
 1. Give the operator the CA and the token:
 
    ```sh
-   helm upgrade --install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.4.1 \
+   helm upgrade --install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.5.0 \
      --namespace inkwall-system --create-namespace --reset-then-reuse-values \
      --set-file controlPlane.caBundle=ca.crt \
      --set controlPlane.enrollmentToken=<token>
@@ -94,7 +94,9 @@ used without a restart.
 - **Security events**, only if the control plane accepts them; otherwise they stay in the engines'
   logs. The engine redacts each event before it leaves the pod: method, host, path without the query
   string, client IP, user agent, status, matched rule IDs with at most 64 bytes of each matched
-  value, the policy and the action.
+  value, the policy and the action. Since 0.5.0, no snippet of an argument or header whose name
+  looks like a credential, and `InkwallConfig.spec.events.redact` redacts more, or every snippet
+  ([Operations](/docs/operations/)).
 - **Request counts**, only if the control plane asks for them: per policy, how many requests the
   engines allowed, denied and detected, and how long inspecting them took (a histogram from 50 µs
   to about 0.8 s). Each replica sums its engines' counts and sends them every 10 seconds, for the

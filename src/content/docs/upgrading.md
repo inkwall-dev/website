@@ -1,19 +1,134 @@
 ---
 title: Upgrading
-description: Upgrade from 0.4.0 to 0.4.1, from 0.3.2 to 0.3.3, from 0.2.2 to 0.2.3, from 0.3.x to 0.4.0, from 0.3.1 to 0.3.2, from 0.3.0 to 0.3.1, and from 0.2.x to 0.3.0, what to check first, what changes by itself, protecting HTTPRoutes, and how to roll back.
+description: Upgrade from 0.4.x to 0.5.0, from 0.4.0 to 0.4.1, from 0.3.2 to 0.3.3, from 0.2.2 to 0.2.3, from 0.3.x to 0.4.0, from 0.3.1 to 0.3.2, from 0.3.0 to 0.3.1, and from 0.2.x to 0.3.0, what to check first, what changes by itself, protecting HTTPRoutes, and how to roll back.
 order: 2
 ---
 
-The latest release is **0.4.1**, a security patch release for 0.4; **0.3.3** is the same fixes for
-0.3. From 0.4.0, upgrade as [below](#from-040-to-041). From any 0.3 release, upgrade straight to
-0.4.1, with `--version 0.4.1` in the commands of [From 0.3.x to 0.4.0](#from-03x-to-040), and read
-both sections; to stay on 0.3, upgrade to 0.3.3 as in [From 0.3.2 to 0.3.3](#from-032-to-033).
+The latest release is **0.5.0**. From any 0.4 release, upgrade straight to 0.5.0 as
+[below](#from-04x-to-050); what changed in 0.4.1 is in [From 0.4.0 to 0.4.1](#from-040-to-041).
+From any 0.3 release, upgrade to 0.4.1 first, with `--version 0.4.1` in the commands of
+[From 0.3.x to 0.4.0](#from-03x-to-040), and read both sections; to stay on 0.3, upgrade to 0.3.3
+as in [From 0.3.2 to 0.3.3](#from-032-to-033).
 From any 0.2 release, upgrade to 0.3.0 first, as in
 [From 0.2.x to 0.3.0](#from-02x-to-030); to stay on 0.2, upgrade to 0.2.3, a security patch
 release, as in [From 0.2.2 to 0.2.3](#from-022-to-023). From 0.1.x, upgrade to 0.2.3 first, then
 to 0.3.0. The
 full guide is
-[`docs/upgrading.md`](https://github.com/inkwall-dev/inkwall/blob/v0.4.1/docs/upgrading.md).
+[`docs/upgrading.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/upgrading.md).
+
+## From 0.4.x to 0.5.0
+
+The chart now checks its values against a schema, so try the upgrade first: it fails on a key the
+chart doesn't have or a wrong type, naming it, where 0.4.x ignored it. `--reuse-values` from 0.4.x
+passes. Then upgrade the chart, with Helm 3 or 4, and restart the proxies whose pods run the
+engine, so they run the 0.5.0 engine:
+
+```sh
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.5.0 \
+  --namespace inkwall-system --reset-then-reuse-values --dry-run
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.5.0 \
+  --namespace inkwall-system --reset-then-reuse-values
+kubectl -n inkwall-system rollout status deployment/inkwall-operator
+kubectl -n <traefik namespace> rollout restart deployment/<traefik>
+```
+
+Restart the HAProxy controller and Istio's ingress gateways the same way; Envoy Gateway and Istio
+roll their Gateways' pods themselves. With the new automatic rollout
+([below](#whats-new-in-050)), the operator restarts the pods it injects for you. Until a pod runs
+the 0.5.0 engine, a policy that uses a 0.5.0 field is `Enforced=False` (`EnginesOutdated`),
+naming it.
+
+The chart upgrades the CRDs too (`crds.install`), and the new fields need them: upgrade the chart
+before you use them. If you install the CRDs yourself, apply 0.5.0's first:
+
+```sh
+helm template inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.5.0 \
+  --show-only templates/crds.yaml | kubectl apply --server-side -f -
+```
+
+### What's new in 0.5.0
+
+Nothing below changes a policy you have: the new fields and settings are off unless you set them.
+
+- **The Core Rule Set's own settings** on a policy's CRS binding, `crs`: `allowedMethods` (for
+  REST APIs that send `PUT`, `PATCH` or `DELETE`), `allowedRequestContentTypes`,
+  `detectionParanoiaLevel` and `outboundAnomalyThreshold`. See [Policies](/docs/policies/).
+- **Exclusions for a cookie, a header or an argument name**: `when: {cookie: session}`, `header` or
+  `argumentName`, beside `argument`.
+- **IP allow and deny lists**: a new kind, `WAFIPList`, and `WAFPolicy.spec.ipLists`. They match
+  the client IP the engine resolves: get that right first ([Client IP](/docs/client-ip/)).
+- **`body.grpc: Deny`** refuses gRPC on routes that serve none ([gRPC](/docs/grpc/)).
+- **Responses through Istio.** A policy with `responses.inspect` has the responses of its Istio
+  HTTPRoutes and VirtualServices inspected, as through Envoy Gateway; they were
+  `ResponsesNotInspected` in 0.4.x.
+- **The client IP behind an HTTP load balancer**: `InkwallConfig.spec.engine.clientIP`
+  (`trustedProxies`, `trustedHops`), for Envoy Gateway, Istio and HAProxy behind an AWS ALB or
+  another load balancer that appends to `X-Forwarded-For` ([Client IP](/docs/client-ip/)).
+- **Automatic engine rollout, opt-in**: with `InkwallConfig.spec.engine.rollout: Automatic`, the
+  operator evicts the Traefik, HAProxy and Istio ingress gateway pods it injects that run an old
+  engine, one at a time ([Operations](/docs/operations/)). The operator's ClusterRole gains
+  `pods/eviction` for it.
+- **`inkwallctl`**: `status` for the whole cluster ([Monitoring](/docs/monitoring/)), `tune` to
+  suggest exclusions from detect mode's events, and `test --suite` with JUnit output
+  ([Testing rules](/docs/testing-rules/)).
+- **The standalone proxy**: gRPC and HTTP/2 (`--h2c`, `--tls-cert`/`--tls-key`, `--upstream-h2c`,
+  `--upstream-ca`), its rules reloaded on `SIGHUP` or with `--watch-rules`, and limits for
+  long-lived connections (`--websocket-idle-timeout`, `--max-connections`, `--body-read-timeout`).
+- **The chart**: a monitoring kit (ServiceMonitor, PodMonitor, alerts and a Grafana dashboard),
+  NetworkPolicies, private registries, image digests, extra env and volumes, and topology spread,
+  all off by default.
+- **Health checks for Argo CD and Flux** for the Inkwall kinds ([GitOps](/docs/gitops/)).
+- **`InkwallConfig.spec.events.redact`** redacts more of the security events' snippets, or all of
+  them, and `spec.engine.jsonDenials` answers JSON clients with a JSON body.
+
+### What changes by itself in 0.5.0
+
+- **Istio policies are `Unverified` after the upgrade** until the operator's probes have answered
+  (seconds, once the gateways' engines are 0.5.0). Some stay out of `Programmed`, and so out of
+  `Ready`: routes whose policies are all in `Detect` mode stay `Unverified`, and routes the probe
+  can't reach are `NotProbeable` (every match a regular expression, mutual TLS or passthrough, or
+  a match on header or query values over TLS, which the probe doesn't send). Alerts on `Ready`
+  should expect it.
+- **Security event log lines are rate-limited**: at most 10 per second for each policy and rule
+  (the engine's `--event-log-rate`); the rest are counted in
+  `inkwall_security_event_logs_suppressed_total`, and still go to the operator. A pipeline that
+  counts attacks from log lines should count from the metrics or the events. Each line now says
+  where rules matched (`matches`), never the value.
+- **Fewer snippets in security events**: what a rule matched in an argument or header whose name
+  looks like a credential is no longer sent.
+- **Metrics**: WebSocket messages are counted in `inkwall_websocket_messages_total`, no longer in
+  `inkwall_requests_total`; `inkwall_requests_total` now also counts the requests no policy covers
+  (`no-policy`) and those let through while inspection is suspended (`suspended`), so its totals
+  rise by them; `inkwall_policy_requests_total` is opt-in; `inkwall_operator_engines` has an
+  `integration` label (sum over it for the old totals).
+- **`Enforced` counts the engines that serve the policy**: an engine of another proxy that is
+  behind, rejects a bundle or is too old no longer makes a policy `Enforced=False`. It also checks
+  the newest field a policy sets, not only the first.
+- **In `Detect` mode with `responses.inspect`**, the responses of flagged requests are inspected
+  too, and the request's event may list a few more rules, since the rules run to the end.
+- **Text output**: `inkwallctl test` adds `matches=` and `score=` after `interrupting=`, and
+  `kubectl get wafpolicies` adds `REASON` before `BUNDLE`. Scripts that parse by position should
+  use `--json`, `-o jsonpath` or `-o custom-columns`.
+- **The `InkwallConfig` reports the cluster's state** (the bundle, the engines, the signing key),
+  with the conditions `SigningKeyRotation` and `IntegrationsConfigured`, and the operator records
+  an Event on a policy when `Ready`, `Programmed` or `Enforced` changes. Its ClusterRole gains
+  `events` `create` and `patch`.
+- **Istio ingress gateways**: the VirtualServices' filters move into the `EnvoyFilter` objects
+  `inkwall-istio-ingress-00` to `-31`. GitOps tools that ignore the operator's objects by label
+  need no change.
+- **`X-Forwarded-For` entries with a port** are read as the address; before, such an entry ended
+  the walk. A request body exactly `body.maxBytes` long is now inspected instead of denied with
+  413.
+- **The standalone proxy** closes WebSockets with `1001` on shutdown instead of dropping them, a
+  body read that hits a deadline gets 408 instead of 400, its upstream connections are kept for
+  reuse, and responses are flushed as they come. Each WebSocket message is scored on its own, not
+  on top of the handshake's score.
+- **ForwardAuth refuses an invalid `X-Forwarded-Host`** with 400, as the reverse proxy refuses such
+  a Host. Traefik sends a Host it has already validated, so its requests aren't affected.
+- **Less engine memory**: policies that differ only in their paranoia level, anomaly threshold or
+  body limits share one compiled Core Rule Set.
+- **Helm 4**: the chart keeps the operator's Pod webhook settings on upgrade. With Helm 4, roll
+  back to 0.4.x with `helm rollback --force-conflicts`.
 
 ## From 0.4.0 to 0.4.1
 
@@ -411,5 +526,5 @@ Roll back to 0.2.2 rather than 0.2.0 or 0.2.1, which are affected by GHSA-r5cq-6
 Upgrade to 0.2.2 first. On the way, every `WAFPolicy` gets the finalizer `waf.inkwall.dev/unwire`
 (from 0.1.0), which matters if Argo CD or Flux manages them ([GitOps](/docs/gitops/)), and bundles
 past 900 KiB compressed are split into chunk Secrets, which 0.1.x can't read. The full guide's
-[0.1.x section](https://github.com/inkwall-dev/inkwall/blob/v0.4.1/docs/upgrading.md#from-01x-to-022)
+[0.1.x section](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/upgrading.md#from-01x-to-022)
 lists every change and how to roll back.

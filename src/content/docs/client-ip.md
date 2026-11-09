@@ -1,15 +1,17 @@
 ---
 title: Client IP
-description: Get the client's real address to the engine behind a load balancer, with the PROXY protocol or externalTrafficPolicy Local, for Traefik and Envoy Gateway.
+description: Get the client's real address to the engine behind a load balancer, with the PROXY protocol, externalTrafficPolicy Local, or trusted proxies behind an HTTP load balancer.
 order: 9
 ---
 
 Behind a load balancer, Traefik sees the load balancer, or a node, as its peer, and so does the
 engine, unless the client's address reaches Traefik. A wrong client IP is worse than none: rules
-that match on the address would see the load balancer, and every security event would carry its
-address. With Envoy Gateway, see [Envoy Gateway](#envoy-gateway). The full guide, with more load
-balancers, is
-[`docs/client-ip.md`](https://github.com/inkwall-dev/inkwall/blob/v0.4.1/docs/client-ip.md).
+that match on the address would see the load balancer, [IP lists](/docs/policies/) would match it,
+and every security event would carry its address. With Envoy Gateway, see
+[Envoy Gateway](#envoy-gateway); behind an HTTP load balancer that adds `X-Forwarded-For`, such as
+an AWS ALB, see [Behind an HTTP load balancer](#behind-an-http-load-balancer). The full guide, with
+more load balancers, is
+[`docs/client-ip.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/client-ip.md).
 
 ## How the address reaches the engine
 
@@ -91,8 +93,47 @@ and the policy's `Programmed` condition is `WiringFailed`, naming your `ClientTr
 the operator can't create or update its own (an admission policy refuses it, say), the routes whose
 body Envoy holds are `WiringFailed` too, with the error, until it's there and accepted.
 
-The end-to-end tests don't check the client IP through Envoy Gateway yet: check it as below, with
-the engine's log in an Envoy pod (`-c inkwall-engine`).
+Check it as below, with the engine's log in an Envoy pod (`-c inkwall-engine`). Since 0.5.0, the
+end-to-end tests check the client IP through Envoy Gateway, with and without a trusted proxy.
+
+## Behind an HTTP load balancer
+
+An HTTP (layer 7) load balancer, such as an AWS Application Load Balancer, a GCP external
+Application Load Balancer or Azure Application Gateway, ends the client's connection and opens its
+own to the proxy, adding the client's address to `X-Forwarded-For`. The proxy's peer is then the
+load balancer, and so is every event's `client_ip`, until the engines trust its entry. Since 0.5.0,
+the `InkwallConfig` says which:
+
+```yaml
+apiVersion: waf.inkwall.dev/v1alpha1
+kind: InkwallConfig
+metadata:
+  name: default
+spec:
+  engine:
+    clientIP:
+      trustedProxies: [10.0.0.0/16]   # the load balancer's addresses: here, the VPC's subnets
+      # trustedHops: 1                # or: one load balancer, whatever its address
+```
+
+The engine walks `X-Forwarded-For` from the right: it skips the entry of the proxy beside it, then
+`trustedHops` entries, then entries from `trustedProxies`, and the first other entry is the client.
+Entries may carry a port (`198.51.100.7:4711`). The settings apply to pods injected after the
+change: Envoy Gateway rolls its Envoy pods itself, and other proxies' pods need a restart.
+
+| Proxy | Trusting the load balancer |
+|---|---|
+| Envoy Gateway, Istio | Works: Envoy keeps the load balancer's `X-Forwarded-For` and appends its address |
+| HAProxy | Works with `trustedProxies`: list the load balancer |
+| Traefik | Doesn't: its ForwardAuth sends only Traefik's own view of the client. Use the [PROXY protocol](#the-proxy-protocol-recommended) |
+
+**A wrong setting lets clients choose their address.** Any client can send `X-Forwarded-For`, and
+the load balancer keeps it, adding the address it saw. Trust only what is in front of the proxy,
+and only if every request goes through it: if the proxy can also be reached directly (a public
+`LoadBalancer` Service next to the ALB, a NodePort), prefer `trustedProxies` with the load
+balancer's own addresses to `trustedHops`, and close the other paths. `trustedProxies:
+[0.0.0.0/0]` trusts everyone: the webhook warns. Count the hops: an ALB behind a CDN that appends
+too is two.
 
 ## Check it
 

@@ -9,7 +9,7 @@ settings into `WAFPolicy` objects, so the routes keep their WAF when they move t
 `HTTPRoute`s served by Traefik or Envoy Gateway. `inkwallctl` is on the
 [releases page](https://github.com/inkwall-dev/inkwall/releases); it only reads, and never changes
 the cluster. The full guide, with every setting and how it maps, is
-[`docs/migrating-from-ingress-nginx.md`](https://github.com/inkwall-dev/inkwall/blob/v0.4.1/docs/migrating-from-ingress-nginx.md).
+[`docs/migrating-from-ingress-nginx.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/migrating-from-ingress-nginx.md).
 
 ## Convert the settings
 
@@ -32,7 +32,12 @@ combined as ingress-nginx combines them: the ConfigMap's `enable-modsecurity`,
 `enable-owasp-modsecurity-crs` and `modsecurity-snippet` first, then the Ingress's annotations.
 `SecRuleEngine` becomes the policy's `mode`, the CRS's paranoia level and anomaly threshold become
 `ruleSets[]` settings, `SecRuleRemoveById` and path-scoped `ctl:` rules become `exclusions` and
-`skip` paths, and the body directives become `body` settings. Other `SecRule` and `SecAction`
+`skip` paths, and the body directives become `body` settings. Since 0.5.0, the CRS's
+`tx.allowed_methods`, `tx.allowed_request_content_type`, `tx.detection_paranoia_level` and
+`tx.outbound_anomaly_score_threshold` become the binding's
+[`crs` settings](/docs/policies/), and targets removed by name from a rule (`!ARGS_NAMES:name`,
+`!REQUEST_COOKIES:name`, `!REQUEST_HEADERS:name`) become exclusions for an argument name, a cookie
+or a header, instead of being marked `TODO` or kept as SecLang. Other `SecRule` and `SecAction`
 rules are kept as they are, in a `WAFRuleSet` loaded after the CRS.
 
 ## Target HTTPRoutes or IngressRoutes
@@ -80,7 +85,8 @@ the migration, `kubectl delete -f waf/`.
 
 - **CRS version.** Inkwall runs CRS v4; older ingress-nginx releases shipped CRS v3. Check
   exclusions of v3 rules.
-- **Requests only.** The CRS's response rules have no equivalent.
+- **Responses.** `SecResponseBodyAccess` isn't converted: set `responses: {inspect: true}` on a
+  policy to run the CRS's response rules, on routes Envoy Gateway or Istio serves.
 - **Body limits.** Inkwall inspects up to `body.maxBytes` (64 KiB by default, 10 MiB at most) and, in
   block mode, rejects larger bodies with 413. Set `body.maxBytes` or `body.onOversize: Allow` on
   routes that take large uploads.

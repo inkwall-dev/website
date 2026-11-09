@@ -1,14 +1,15 @@
 ---
 title: gRPC
-description: What the engine inspects in a gRPC call, reading the text in its messages, and how a denied call is answered.
+description: What the engine inspects in a gRPC call, reading the text in its messages, how a denied call is answered, gRPC through the standalone proxy, and refusing gRPC where none is served.
 order: 5.7
 ---
 
 gRPC calls are inspected on their path, query and metadata, through every proxy. From v0.4.0, a
 policy can have the text in their messages inspected too, a denied call is answered as gRPC
-(status 7, `PERMISSION_DENIED`), and gRPC-Web text calls are inspected as gRPC calls. Before
+(status 7, `PERMISSION_DENIED`), and gRPC-Web text calls are inspected as gRPC calls. From v0.5.0,
+the standalone proxy speaks gRPC, and a policy can refuse gRPC on routes that serve none. Before
 v0.3.1, the Core Rule Set denied every gRPC call in `Block` mode and logged it in `Detect` mode. The
-full guide is [`docs/grpc.md`](https://github.com/inkwall-dev/inkwall/blob/v0.4.1/docs/grpc.md).
+full guide is [`docs/grpc.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/grpc.md).
 
 ## Which requests are gRPC calls
 
@@ -72,14 +73,15 @@ time and denies gets 14 (`UNAVAILABLE`), and an oversized body gets 8 (`RESOURCE
 
 | Proxy | HTTP status of a denied call |
 |---|---|
-| Envoy Gateway, Istio, raw Envoy, the engine's reverse proxy | 200, with the gRPC status in the headers |
+| Envoy Gateway, Istio, raw Envoy | 200, with the gRPC status in the headers |
+| The engine's reverse proxy, with `--h2c` and `--upstream-h2c`, or over TLS ([below](#through-the-standalone-proxy)) | 200, with the gRPC status in the headers |
 | HAProxy, with `haproxy.cfg`'s gRPC rules | 200, with the gRPC status in the headers |
 | Traefik | 403, with the gRPC status in the headers |
 
 Traefik's ForwardAuth denies only on an answer other than 2xx, so the HTTP status stays 403 there.
 Envoy counts a denied gRPC call as HTTP 200 in its access log and metrics, as any gRPC error; the
-engine's security events count it as a denial. Through Istio, this isn't covered by an end-to-end
-test yet.
+engine's security events count it as a denial. Since 0.5.0, the end-to-end tests cover gRPC
+through Istio too.
 
 ## Streaming calls
 
@@ -94,15 +96,43 @@ its whole request, or as much as the proxy buffers:
   default): a call is held the same way, and a message past the buffer is an oversized body.
 - **Traefik**'s ForwardAuth reads the whole body before asking the engine, whatever the policy
   says, and refuses bodies over 10 MiB (401). Bidirectional calls stall there too.
+- **The standalone proxy** reads up to `--max-body-bytes` of the body before it decides, then
+  streams the rest: a call is held as through Envoy Gateway, and a bidirectional call whose client
+  waits for the server stalls unless its path is in `--skip-body-paths`.
+
+## Through the standalone proxy
+
+gRPC needs HTTP/2 from the client to the server. Since v0.5.0, `inkwall-engine proxy` speaks it on
+both sides when asked:
+
+```sh
+# Cleartext, as most in-cluster gRPC clients and servers:
+inkwall-engine proxy --h2c --upstream http://grpc-server:50051 --upstream-h2c --mode block
+# TLS, with the server's certificate from a private CA:
+inkwall-engine proxy --tls-cert tls.crt --tls-key tls.key \
+    --upstream https://grpc-server:50051 --upstream-ca ca.crt --mode block
+```
+
+HTTP/1.1 clients still work on the same listener, and streamed responses pass to the client as
+they come. `--read-timeout` (60 s by default) bounds each call's request side: for long-lived
+streaming calls, raise it or set it to `0`.
 
 ## If you serve no gRPC
 
 A request that only claims to be gRPC, to get a JSON or form body past the rules, is inspected in
 full: such a body doesn't start with a message prefix. An application that isn't gRPC but reads any
 body however it is labelled could still get a body made to look like gRPC messages. If your routes
-serve no gRPC, deny gRPC content types with a SecLang rule in a `WAFRuleSet`:
+serve no gRPC, deny gRPC on the policy (since v0.5.0):
 
+```yaml
+spec:
+  body:
+    grpc: Deny
 ```
-SecRule REQUEST_HEADERS:Content-Type "@rx (?i)^application/grpc" \
-    "id:1000100,phase:1,deny,status:403,log,msg:'gRPC is not served here'"
-```
+
+A request with a gRPC or gRPC-Web content type (`application/grpc`, `application/grpc+json`,
+`application/grpc-web`, `application/grpc-web-text`...) is then denied before any rule, whatever
+its body, with reason `grpc`: 403, or the gRPC status `PERMISSION_DENIED` to a gRPC client. In
+`Detect` mode it is logged. Other content types, and the paths in `skip.paths`, are unaffected, and
+`inkwallctl test --policy` applies it too. An engine before 0.5.0 ignores the field: the policy is
+`Enforced=False` (`EnginesOutdated`) while one runs it.

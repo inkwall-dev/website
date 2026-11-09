@@ -4,20 +4,29 @@ description: Install Inkwall with Helm, protect a Traefik or Envoy Gateway route
 order: 1
 ---
 
-> Inkwall v0.4.1 works with **Traefik** (`Ingress`, `IngressRoute` and Gateway API `HTTPRoute`
+> Inkwall v0.5.0 works with **Traefik** (`Ingress`, `IngressRoute` and Gateway API `HTTPRoute`
 > routes), **Envoy Gateway** and **Istio** (`HTTPRoute` routes, and Istio's `VirtualService`
 > routes), and the **HAProxy Kubernetes Ingress Controller** (`Ingress` routes); and, without the
 > operator, with an Envoy or HAProxy you configure yourself. What each one inspects is on
-> [Proxies](/docs/proxies/). You need Kubernetes 1.29 or later and Helm 3. The API is `v1alpha1`
-> and will change. Upgrading from 0.3.x? See [Upgrading](/docs/upgrading/).
+> [Proxies](/docs/proxies/). You need Kubernetes 1.29 or later and Helm 3 or 4. The API is
+> `v1alpha1` and will change. Upgrading from 0.4.x? See [Upgrading](/docs/upgrading/).
+
+To try it on your laptop first, the
+[quickstart](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/quickstart.md) goes from
+nothing to a blocked attack in about five minutes, on a kind cluster with the released chart,
+Traefik and a demo app; [`examples/`](https://github.com/inkwall-dev/inkwall/tree/v0.5.0/examples)
+has the same app behind Traefik, Envoy Gateway and Istio.
 
 ## Install
 
 ```sh
-helm install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.4.1 \
+helm install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.5.0 \
   --namespace inkwall-system --create-namespace
 kubectl -n inkwall-system rollout status deployment/inkwall-operator
 ```
+
+The chart checks its values against a schema: a key it doesn't have, or a wrong type, fails the
+install with its name.
 
 Then install Traefik, or restart it if it already runs: Traefik pods started after the operator get
 the engine as a sidecar.
@@ -75,15 +84,22 @@ policy to every engine. The policy is `Ready` once it is wired and every engine 
 
 ```console
 $ kubectl get wafpolicy -n shop
-NAME   MODE    READY   BUNDLE   AGE
-web    Block   True    2        3s
+NAME   MODE    READY   REASON   BUNDLE   AGE
+web    Block   True    Ready    2        3s
 $ curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: shop.example.com' \
     "http://$TRAEFIK/?id=1%27%20OR%20%271%27%3D%271"
 403
 ```
 
+`REASON` says why a policy isn't `Ready`, and `inkwallctl status` checks the whole cluster: the
+proxies, the policies that aren't `Ready` and the engines, with what to do
+([Monitoring](/docs/monitoring/)).
+
 Start in `Detect` mode, check the logs for false positives, tune them with
-[exclusions](/docs/policies/), then switch to `Block`. Behind a cloud load balancer, make sure the
+[exclusions](/docs/policies/) (`inkwallctl tune` suggests them from the logs, see
+[Testing rules](/docs/testing-rules/)), then switch to `Block`. A REST API that takes `PUT`,
+`PATCH` or `DELETE` needs them in the policy's `crs.allowedMethods`: the Core Rule Set denies them
+by default. Behind a cloud load balancer, make sure the
 engine sees the [client's IP](/docs/client-ip/). Coming from ingress-nginx with ModSecurity?
 `inkwallctl migrate ingress-nginx` converts its annotations into policies: see
 [Migrating from ingress-nginx](/docs/migrating-from-ingress-nginx/).
@@ -94,7 +110,7 @@ Images, the chart and the binaries' checksums are signed keyless with cosign, fr
 workflow. Verify them with cosign v3 or later: cosign v2 reports `no signatures found`.
 
 ```sh
-cosign verify ghcr.io/inkwall-dev/inkwall-engine:0.4.1 \
+cosign verify ghcr.io/inkwall-dev/inkwall-engine:0.5.0 \
   --certificate-identity-regexp '^https://github.com/inkwall-dev/inkwall/\.github/workflows/release\.yaml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
@@ -121,20 +137,26 @@ Main flags (`inkwall-engine proxy -h` for all):
 | `--mode` | `detect` | `block` to enforce |
 | `--paranoia-level` | `1` | CRS paranoia level, 1–4 |
 | `--rules`, `--rules-before-crs` | | Your SecLang rules and exclusions, loaded after or before CRS |
+| `--watch-rules` | off | Reload the rules when their files change; `SIGHUP` reloads them too, and rules that don't compile leave the old ones in force |
 | `--skip-paths`, `--skip-body-paths` | | Paths not inspected at all, or without their body, e.g. `/healthz,/static/*` |
 | `--disable-rule-groups` | | CRS attack families the app can't be vulnerable to, e.g. `php,java` |
 | `--websocket-origins`, `--websocket-required-headers` | | Origins a WebSocket handshake may come from, headers it must have |
 | `--websocket-messages` | `off` | `inspect` or `text-only`: inspect each text message a client sends on a WebSocket; a denied one closes it with 1008 |
 | `--grpc-messages` | `skip` | `inspect`: read the text in gRPC messages ([gRPC](/docs/grpc/)) |
+| `--websocket-idle-timeout`, `--max-connections`, `--body-read-timeout` | off | Limits for long-lived connections; on shutdown, WebSockets get `1001` |
 | `--max-body-bytes` | `65536` | Body bytes inspected |
 | `--failure-mode` | `auto` | Uninspectable requests: closed in block mode, open in detect mode |
-| `--trusted-proxies` | | CIDRs whose `X-Forwarded-For` is trusted |
+| `--trusted-proxies`, `--trusted-hops` | | CIDRs whose `X-Forwarded-For` is trusted, or how many of its entries are proxies ([Client IP](/docs/client-ip/)) |
+| `--h2c`, `--tls-cert`, `--tls-key` | | HTTP/2 from clients, without TLS or over it, as gRPC needs |
+| `--upstream-h2c`, `--upstream-ca` | | HTTP/2 to the upstream, or a CA for an `https://` upstream ([gRPC](/docs/grpc/)) |
+| `--json-denials` | off | Answer clients that accept JSON with a JSON body; every denial carries `X-Request-Id` |
 | `--listen`, `--admin-listen` | `:8480`, `:9480` | Proxy address; address of `/metrics`, `/healthz` and `/readyz` |
 
-Each blocked or detected request logs one JSON line with the rule IDs; metrics are on
+Each blocked or detected request logs one JSON line with the rule IDs and where each matched
+(`942100@ARGS:q`, never the value), at most 10 lines per second for each policy and rule; metrics are on
 `:9480/metrics`. The proxy accepts only origin-form request targets (`GET /path`): an absolute-form
 target (`GET http://host/path`) or an invalid `Host` gets a 400. The guide,
-[running the engine without Kubernetes](https://github.com/inkwall-dev/inkwall/blob/v0.4.1/docs/standalone-proxy.md),
+[running the engine without Kubernetes](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/standalone-proxy.md),
 also covers the engine's `forward-auth`, `check`, `ext-proc` (Envoy's external processing API over
 gRPC) and `spoe` (HAProxy's SPOE) modes; see [Proxies](/docs/proxies/).
 
