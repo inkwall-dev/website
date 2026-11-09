@@ -1,12 +1,12 @@
 ---
 title: Testing rules
-description: Check verdicts and measure performance without sending real traffic.
+description: Check verdicts, run test suites in CI, get exclusions suggested from the events, and measure performance, without sending real traffic.
 order: 5
 ---
 
 `inkwallctl` is on the [releases page](https://github.com/inkwall-dev/inkwall/releases), next to the
 engine; `inkwallctl version` prints which release it is. The full guide is
-[`docs/testing-policies.md`](https://github.com/inkwall-dev/inkwall/blob/v0.4.1/docs/testing-policies.md).
+[`docs/testing-policies.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/testing-policies.md).
 
 ## inkwallctl test
 
@@ -18,11 +18,12 @@ engine's checks in-process with the same flags as the engine (`--paranoia-level`
 
 ```console
 $ inkwallctl test 'http://shop.example.com/?id=1%27%20OR%20%271%27%3D%271'
-deny  403  GET /?id=1%27%20OR%20%271%27%3D%271  reason=rule  rules=942100,949110  interrupting=949110  847µs
+deny  403  GET /?id=1%27%20OR%20%271%27%3D%271  reason=rule  rules=942100,949110  interrupting=949110  matches=942100@ARGS:id,949110@TX:blocking_inbound_anomaly_score  score=5  847µs
 ```
 
-Each line shows the verdict, the status, the request, why, the matched rule IDs and the time the
-check took.
+Each line shows the verdict, the status, the request, why, the matched rule IDs, where each rule
+matched (`rule@variable`: rule 942100 matched the query argument `id`), the request's anomaly
+score and the time the check took. `--json` has the same as `matches` and `anomaly_score`.
 
 `--expect allow|deny` turns it into a CI check for rule changes: replay a HAR of your checkout
 flow with your exclusions, and fail the build if a legitimate request would be blocked.
@@ -34,8 +35,8 @@ inkwallctl test --rules my-exclusions.conf --expect allow --har checkout-flow.ha
 ### Test WAFPolicy objects
 
 `--policy` tests the `WAFPolicy` objects you keep in Git before they reach the cluster. With the
-rule sets (`--rule-set`), ConfigMaps (`--configmap`) and the Ingresses, Traefik IngressRoutes,
-Gateway API HTTPRoutes or Istio VirtualServices (`--ingress`) they use, it
+rule sets (`--rule-set`), ConfigMaps (`--configmap`), `WAFIPList` objects, and the Ingresses,
+Traefik IngressRoutes, Gateway API HTTPRoutes or Istio VirtualServices (`--ingress`) they use, it
 resolves them as the operator does (each request goes to the policy of its host and path, and
 `policy=` names it) and compiles them as the engine does.
 
@@ -56,6 +57,7 @@ resolves them as the operator does (each request goes to the policy of its host 
 - Objects the operator would reject, such as a missing rule set or rules that don't compile, are
   errors.
 - Objects without a namespace go to `--namespace` (default `default`), as with `kubectl apply -n`.
+- `--client-ip` sets the client's address, for policies with [IP lists](/docs/policies/).
 - The inspection deadline is raised to 10 s, so a slow CI runner can't turn a verdict into a
   timeout.
 
@@ -63,12 +65,13 @@ resolves them as the operator does (each request goes to the policy of its host 
 $ inkwallctl test --policy wafpolicy.yaml --rule-set wafruleset.yaml --configmap configmap.yaml \
     --ingress ingress.yaml --request requests.http
 allow      GET /products/42  policy=shop/storefront  580µs
-deny  403  GET /?id=1%27%20OR%20%271%27%3D%271  policy=shop/storefront  reason=rule  rules=942100,949110  interrupting=949110  623µs
-log        GET /api/orders?debug=true  policy=shop/api  reason=rule  rules=100100  interrupting=100100  20µs
+deny  403  GET /?id=1%27%20OR%20%271%27%3D%271  policy=shop/storefront  reason=rule  rules=942100,949110  interrupting=949110  matches=942100@ARGS:id,949110@TX:blocking_inbound_anomaly_score  score=5  623µs
+log        GET /api/orders?debug=true  policy=shop/api  reason=rule  rules=100100  interrupting=100100  matches=100100@ARGS:debug  20µs
 allow      GET /?id=1%27%20OR%20%271%27%3D%271  reason=no_policy  0s
 ```
 
-In CI, keep attacks and legitimate traffic next to the policies. A wrong verdict exits 1, an error 2:
+In CI, keep attacks and legitimate traffic next to the policies, or in a [suite](#test-suites). A
+wrong verdict exits 1, an error 2:
 
 ```sh
 inkwallctl test --policy k8s/waf/ --expect deny --request test/waf/attacks.http
@@ -88,6 +91,73 @@ inkwallctl test --bundle bundle.yaml --bundle-key bundle.pub --har traffic.har
 
 A bundle too large for one Secret is split into chunk Secrets. `inkwallctl` then prints the
 `kubectl get secret` command that saves the bundle Secret with its chunks.
+
+### Test suites
+
+Since 0.5.0, a suite keeps the requests and the verdicts they must get in one file, and
+`inkwallctl test --suite` checks each case. A case can also hold the upstream's response, to test
+the response rules (data leaks) offline. The format is experimental: it may change in a minor
+release.
+
+```yaml
+policy: wafpolicy.yaml       # paths are relative to the suite file
+ingress: route.yaml
+cases:
+  - name: a login form passes
+    request: {method: POST, uri: /login, host: shop.example.com, body: "user=alice&password=b"}
+    expect: {action: allow}
+  - name: SQL injection is denied
+    request: {url: "http://shop.example.com/search?q=1' OR '1'='1"}
+    expect: {action: deny, status: 403, rules: [942100], policy: shop/web}
+  - name: an SQL error page is not leaked
+    request: {uri: "/item?id=7", host: shop.example.com}
+    response:
+      status: 500
+      headers: {Content-Type: text/html}
+      body: "You have an error in your SQL syntax; check the manual"
+    expect: {action: deny, phase: response}
+```
+
+```sh
+inkwallctl test --suite test/waf/suite.yaml --junit waf-results.xml
+```
+
+A case's request is inline, or a `file` of raw HTTP requests or a HAR, every one of which must
+meet the expectation. `expect` takes `action`, `status`, `rules`, `exactRules`, `notRules`,
+`policy` and `phase`. A failing case says what was expected and what the verdict was, and the run
+exits 1. `--junit` writes the results as JUnit XML, which CI systems show as test reports.
+
+## inkwallctl tune
+
+Since 0.5.0, `inkwallctl tune` reads detect mode's security events (the engines' logs with
+`--from-logs`, or the events API's, one JSON object per line), groups them by policy, path, rule
+and variable, and suggests the narrowest exclusion for each group: a rule on one exact path for one
+argument, argument name, cookie or header.
+
+```console
+$ kubectl -n traefik logs -l app.kubernetes.io/name=traefik -c inkwall-engine --since=168h >engine.log
+$ inkwallctl tune --from-logs engine.log
+15 security events
+
+WAFPolicy shop/storefront: 13 logged requests would be denied in Block mode
+  942100@ARGS:q on /search: 6 times, 4 client IPs (request IDs req-q0, req-q1, req-q2)
+  942440@REQUEST_COOKIES:session_hint on /account: 1 time, 1 client IP (request IDs req-c1)
+  Suggested exclusions:
+    rules 942440, on /account, for cookie session_hint
+    rules 942100, on /search, for argument q
+```
+
+- It never suggests the anomaly score rules (949110 and the like), nor a rule off for every path;
+  a rule off for every variable on a path only with `--broad`.
+- Many client IPs in one group point to a false positive; one client IP, to a scanner or an
+  attack. Check each group before you add it; `--min-count` leaves out what was seen fewer times.
+- `-o yaml` writes the exclusions to add. With `--policy` (and `--rule-set`, `--configmap`,
+  `--ingress`), it writes the policies with the exclusions appended, ready to test with
+  `inkwallctl test --policy` and to apply.
+
+Engines log at most 10 security event lines per second for each policy and rule; the rest are
+counted in `inkwall_security_event_logs_suppressed_total`. The events sent to the operator aren't
+limited.
 
 ## inkwallctl bench
 

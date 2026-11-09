@@ -7,7 +7,7 @@ order: 8
 The operator signs every policy bundle with an Ed25519 key, generated on first use and kept in the
 Secret `inkwall-bundle-signing-key` in its namespace. Engines accept a bundle only if it's signed by
 a key in the `inkwall-trust` ConfigMap of their pod's namespace (`trusted-keys.pub`). The full guide
-is [`docs/key-rotation.md`](https://github.com/inkwall-dev/inkwall/blob/v0.4.1/docs/key-rotation.md).
+is [`docs/key-rotation.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/key-rotation.md).
 
 ## How a rotation works
 
@@ -69,15 +69,20 @@ Without it, the key rotates only when you ask.
 
 ## Check it worked
 
-The phase on the Secret reads `Publishing`, then `Retiring`, then nothing:
+Since 0.5.0, the `InkwallConfig` shows the rotation: its `KEY` column reads `Publishing`, then
+`Retiring`, then `Idle`.
 
 ```sh
-kubectl -n inkwall-system get secret inkwall-bundle-signing-key \
-  -o jsonpath='{.metadata.annotations.waf\.inkwall\.dev/rotation-phase}{"\n"}'
-kubectl -n inkwall-system logs deploy/inkwall-operator | grep 'signing key rotation'
+kubectl get inkwallconfig default -w
+kubectl get inkwallconfig default -o jsonpath='{.status.signingKey}{"\n"}'
 ```
 
-The leader logs each step, and while it waits, which engines it waits for (up to three).
+`status.signingKey` has the key that signs (`activeKeyID`), the phase, when it began (`since`),
+and what the rotation waits for (`waitingFor`), naming up to three engines. The
+`SigningKeyRotation` condition is `True` while a rotation is in progress, and
+`inkwall_operator_signing_key_rotation_phase` has the phase for alerts. The leader also logs each
+step, and the signing key Secret's `waf.inkwall.dev/rotation-phase` annotation has the phase, for
+tools that read it.
 
 ## When a rotation waits
 

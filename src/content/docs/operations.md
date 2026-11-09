@@ -1,6 +1,6 @@
 ---
 title: Operations
-description: What happens when the operator or the engine is down, bundle size, proxy namespaces, integration permissions, opting a proxy out, turning injection off, deleting policies, the emergency switch and uninstalling.
+description: What happens when the operator or the engine is down, bundle size, metrics, rolling out a new engine, proxy namespaces, integration permissions, redacting security events, network policies, chart values, opting a proxy out, turning injection off, deleting policies, the emergency switch and uninstalling.
 order: 6
 ---
 
@@ -71,16 +71,43 @@ since engines run them as they are. The metric `inkwall_operator_bundle_compress
 
 ## Metrics
 
-The operator's metrics include:
+The operator serves its metrics on port 8080, and each engine on port 9480 (`inkwall-admin`) in
+the proxy pod it runs in. Among the operator's:
 
 | Metric | |
 |---|---|
 | `inkwall_operator_bundle_version`, `inkwall_operator_bundle_compressed_bytes` | The current bundle, and its size |
-| `inkwall_operator_engines{state}` | Engines by state; the `Enforced` messages no longer count them |
+| `inkwall_operator_engines{state}` | Engines by state; the `Enforced` messages don't count them |
 | `inkwall_operator_engines_left_out` | Engines left out of a replica's engine report; while any are, `Enforced` is `False` (`EnginesUnreported`) |
-| `inkwall_operator_wired_targets{integration}` | Policy targets wired, by integration (`traefik`, `envoy-gateway`) |
+| `inkwall_operator_policies{condition,status,reason}` | Policies by each condition and its reason (since 0.5.0) |
+| `inkwall_operator_signing_key_age_seconds`, `inkwall_operator_signing_key_rotation_phase` | The signing key's age, and the [rotation](/docs/key-rotation/)'s phase (since 0.5.0) |
+| `inkwall_operator_wired_targets{integration}` | Policy targets wired, by integration |
 | `inkwall_operator_wiring_failures{integration}` | Targets that couldn't be wired (`WiringFailed`) |
 | `inkwall_operator_request_stats_dropped_total{reason}` | Policies' request counts dropped on their way to a [control plane](/docs/control-plane/) |
+
+The engines' metrics, the alerts and the Grafana dashboard the chart ships, and what to do when an
+alert fires are on [Monitoring](/docs/monitoring/).
+
+## Rolling out a new engine
+
+Proxy pods started before Inkwall, or running another engine image than the one configured (after
+a chart upgrade, say), are `PendingRestart` until restarted; Envoy Gateway and Istio's Gateways roll
+their own pods. That is the default (`Manual`). Since 0.5.0, the operator can restart the others
+itself:
+
+```sh
+kubectl patch inkwallconfig default --type=merge -p '{"spec":{"engine":{"rollout":"Automatic"}}}'
+```
+
+It then evicts the Traefik, HAProxy and Istio ingress gateway pods it injected that run an old
+engine, one at a time, through the Eviction API, so PodDisruptionBudgets are respected, and waits
+for each replacement to be ready with the new engine before the next. A pod with the engine in its
+own spec is left alone. A refused eviction, or a replacement not ready within 5 minutes, pauses the
+rollout, and the `InkwallConfig`'s `EngineRollout` condition says why:
+
+```sh
+kubectl get inkwallconfig default -o jsonpath='{.status.conditions[?(@.type=="EngineRollout")].message}'
+```
 
 ## Proxy namespaces
 
@@ -99,7 +126,7 @@ else is an ordinary pod. List only namespaces where only the people who run the 
 If your proxy runs in another namespace, list it, with the defaults you still need:
 
 ```sh
-helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.4.1 \
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.5.0 \
   --namespace inkwall-system --reset-then-reuse-values \
   --set 'injection.proxyNamespaces={ingress,envoy-gateway-system}'
 ```
@@ -133,6 +160,46 @@ webhook selects no Traefik pod; the same goes for Istio's ingress gateway pods w
 `istioIngress`. When a role is granted or revoked, each replica restarts after a random
 delay. Routes wired before an integration was disabled stay wired: unprotect them first.
 
+## Redacting security events
+
+Each security event an engine sends to the operator (and on to a connected
+[control plane](/docs/control-plane/)) names the rules that matched, where, and a snippet of at most
+64 bytes of what matched. Since 0.5.0, an engine never sends a snippet of an argument or header
+whose name looks like a credential (`password`, `token`, `api_key`, `session`, `card`...), nor of a
+query string or body that names one. `InkwallConfig.spec.events.redact` redacts more:
+
+```yaml
+spec:
+  events:
+    redact:
+      headers: [X-Tenant-Secret]   # header names, any case
+      arguments: [email, phone]    # parts of argument names, any case: user_email too
+      snippets: false              # or send no snippets at all
+```
+
+The engines get it with the next bundle. Engine logs never carry snippets.
+
+## Network policies
+
+For clusters that deny traffic by default, `networkPolicy.enabled: true` (off by default, since
+0.5.0) creates a NetworkPolicy for the operator's pods: the webhooks and probes from anywhere
+(`networkPolicy.webhookFrom` narrows it), the engines' bundle stream from the proxy namespaces, and
+the metrics (`networkPolicy.metricsFrom`). `networkPolicy.egress.enabled: true` also limits what
+the chart's pods connect to. Engines run in the proxies' namespaces, which the chart doesn't own: if
+those deny by default, let the engines reach the operator's port 9445 and the API server. The chart
+README has the
+[network flows](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/deploy/helm/inkwall/README.md#network-flows).
+
+## Chart values
+
+Since 0.5.0, the chart checks its values against a schema: `helm install`, `upgrade` and
+`template` fail on a key it doesn't have, a wrong type or a value outside its set, naming it, where
+0.4.x ignored it. Run `helm upgrade ... --dry-run` first. It also takes private registries
+(`global.imageRegistry`, `global.imagePullSecrets`), image digests, extra env and volumes, and
+topology spread
+([private registries](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/deploy/helm/inkwall/README.md#private-registries)).
+The chart works with Helm 3 and Helm 4.
+
 ## Proxies with other labels
 
 If your Traefik pods carry other labels than `app.kubernetes.io/name=traefik`:
@@ -159,7 +226,7 @@ operator unwires the routes (`SidecarMissing`) until one matches again.
 ## Turning injection off
 
 ```sh
-helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.4.1 \
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.5.0 \
   --namespace inkwall-system --reset-then-reuse-values --set injection.enabled=false
 ```
 
@@ -239,4 +306,4 @@ The CRDs, your `WAFPolicy` objects and the operator's Secrets (the bundle, its c
 key) are kept, so a reinstall continues with the same keys. To remove the Secrets, delete the
 namespace.
 
-More in the [chart README](https://github.com/inkwall-dev/inkwall/tree/v0.4.1/deploy/helm/inkwall).
+More in the [chart README](https://github.com/inkwall-dev/inkwall/tree/v0.5.0/deploy/helm/inkwall).

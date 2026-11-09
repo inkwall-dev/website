@@ -11,7 +11,7 @@ down, engines keep enforcing the last policy they received.
 
 ## The operator
 
-In v0.4.1, with Traefik, Envoy Gateway, Istio and the HAProxy Kubernetes Ingress Controller:
+In v0.5.0, with Traefik, Envoy Gateway, Istio and the HAProxy Kubernetes Ingress Controller:
 
 1. **Validates** policies and rule sets when you save them, compiling the rules with the engine's
    own Coraza version.
@@ -22,22 +22,26 @@ In v0.4.1, with Traefik, Envoy Gateway, Istio and the HAProxy Kubernetes Ingress
    controller's pods when they are created; into Envoy Gateway's Envoy pods through the Gateway's
    `EnvoyProxy`, and into Istio's Gateway pods through the ConfigMap the Gateway names, so Envoy
    Gateway and Istio roll them themselves. Only pods in the [proxy namespaces](/docs/operations/)
-   get it.
+   get it. With `InkwallConfig.spec.engine.rollout: Automatic` (since 0.5.0), it also evicts the
+   pods it injected that run an old engine, one at a time, so they get the new one.
 4. **Wires** each route a policy targets. With Traefik, an `Ingress`, an `IngressRoute` or an
    `HTTPRoute` gets a ForwardAuth middleware that sends every request to the engine first, keeping
    your own middlewares (for an `HTTPRoute`, through an `ExtensionRef` filter). With Envoy Gateway,
    each `HTTPRoute` gets an `EnvoyExtensionPolicy` whose ext_proc filter calls the engine on a
    Unix socket. With Istio, an `EnvoyFilter` turns ext_proc on for the protected `HTTPRoute` and
    `VirtualService` routes. With the HAProxy controller, each `Ingress` gets a backend snippet that
-   calls the engine's SPOE agent, and the operator probes every pod to prove it. It unwires them when the policy is deleted, and when the engine can't be injected
+   calls the engine's SPOE agent. Through HAProxy and Istio, the operator sends a signed probe
+   through every pod to prove the filter is on the route before it says so. It unwires them when the policy is deleted, and when the engine can't be injected
    (injection off, or no proxy pod it would inject), so routes are never wired to an engine that
    isn't there.
 5. **Builds a signed bundle** of every policy, and streams it to the engines, which verify the
    signature and swap policies without a restart. The signing key can be
    [rotated](/docs/key-rotation/) without dropping a request. The bundle is also kept in the
    Secret `inkwall-bundle`; past 900 KiB compressed, it is split into chunk Secrets, up to 7.2 MiB.
-6. **Reports** each policy's status, up to `Enforced` by every engine. A policy's status is written
-   only when it changes, so a proxy rollout doesn't rewrite every policy.
+6. **Reports** each policy's status, up to `Enforced` by the engines that serve its routes. A
+   policy's status is written only when it changes, so a proxy rollout doesn't rewrite every
+   policy. The `InkwallConfig` reports the cluster's state: the bundle, the engines and the signing
+   key; `inkwallctl status` reads it all ([Monitoring](/docs/monitoring/)).
 
 Each proxy's wiring sits behind one integration interface, with a `ClusterRole` of its own. If the
 operator lacks some of an integration's permissions, it disables that integration instead of
@@ -65,16 +69,26 @@ from 12 s to 0.4 s, and the slowest of 10 policy changes reached every engine in
 also sets `GOMEMLIMIT` to 90% of its container's memory limit and no longer makes the allocations
 that raised its peak: over 5 runs at that size, its median peak memory went from 472 to 409 MiB,
 under the chart's default 512 MiB limit. In 0.4.0 it ran again with response inspection on, with
-no difference. The measurements are in the
-[operator design](https://github.com/inkwall-dev/inkwall/blob/v0.4.1/docs/design/0004-operator.md#8-scale-targets-v1).
+no difference.
+
+In 0.5.0, the scale test also measures the wiring controller, with Istio VirtualServices on one
+Gateway of three pods. Each reconcile now lists the Gateway's pods once instead of once per policy,
+and a rollout of 5 pods writes each policy's status 4 times instead of 20. At 5,000 policies, which
+didn't fit before (the ingress gateways' one `EnvoyFilter` passed etcd's size limit at about 1,200
+VirtualServices; it is sharded now), every policy was wired in 22 s, a reconcile took 0.5 s, and the
+operator peaked at 449 MiB. The measurements are in the
+[operator design](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/design/0004-operator.md#8-scale-targets-v1).
 
 ## The engine
 
 Every proxy integration (forward-auth for Traefik, ext_proc for Envoy Gateway, Istio and raw Envoy,
 SPOE for HAProxy, the check API, the reverse proxy) feeds the same pipeline. Cheap checks run first, so most requests never
-reach a regular expression: paths you skip are not inspected, oversized bodies are handled by
-policy, and a bounded number of requests are inspected at once, so overload is answered at once
-instead of queueing. The rules are the OWASP Core Rule Set, run by OWASP Coraza.
+reach a regular expression: paths you skip are not inspected, a client on a policy's
+[IP lists](/docs/policies/) is denied or let through before any rule, oversized bodies are handled
+by policy, and a bounded number of requests are inspected at once, so overload is answered at once
+instead of queueing. The rules are the OWASP Core Rule Set, run by OWASP Coraza. Since 0.5.0,
+policies that differ only in their paranoia level, anomaly threshold or body limits share one
+compiled Core Rule Set, about 2.1 MiB of memory less for each.
 
 ![The engine's adapters (reverse proxy, forward-auth, check API) share one pipeline: route table, body limits, admission, then Coraza with the Core Rule Set, with metrics and logs.](/diagrams/engine-internals.svg)
 
@@ -140,7 +154,7 @@ sees the request's real protocol (HTTP/1.1, HTTP/2, HTTP/3). For a policy with `
 Envoy also sends the app's responses, and holds each until the engine answers: one that leaks is
 replaced with 403 in block mode. That costs about 0.85 ms of engine CPU per KiB of response
 inspected. Istio's Gateways and ingress gateways, and a raw Envoy you configure yourself, call the
-engine the same way; Istio's filter doesn't send responses yet.
+engine the same way; since 0.5.0, Istio's filter sends responses too.
 
 **HAProxy SPOE.** HAProxy's Stream Processing Offload Engine sends each request, with as much of
 its body as HAProxy buffers (about 15 KiB by default), to `inkwall-engine spoe`, which answers with

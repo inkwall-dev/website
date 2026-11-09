@@ -1,6 +1,6 @@
 ---
 title: Roadmap
-description: What each release ships, from v0.1.0 to v0.4.1, and what the next milestones bring.
+description: What each release ships, from v0.1.0 to v0.5.0, and what the next milestones bring.
 order: 11
 ---
 
@@ -140,6 +140,52 @@ Security releases for the 0.4, 0.3 and 0.2 lines ([release post](/blog/inkwall-v
 0.4.1 and 0.3.3 also set the engine's Go memory limit from its container's, and keep only the inspected part of
 a large body through ext_proc.
 
+## v0.5.0: tuning, visibility and scale
+
+The milestone ([release post](/blog/inkwall-v0-5-0/)), enhancements to what 0.4.0 shipped:
+
+- Tuning on the policy: the Core Rule Set's own settings (`crs`: allowed methods and content
+  types, detection paranoia, outbound threshold), exclusions for a cookie, a header or an argument
+  name, and IP allow and deny lists (`WAFIPList`) ([Policies](/docs/policies/)).
+- `inkwallctl tune` suggests exclusions from detect mode's events, and `inkwallctl test --suite`
+  runs a file of cases with JUnit output ([Testing rules](/docs/testing-rules/)).
+- Responses through Istio, and in `Detect` mode the responses of flagged requests; Istio routes
+  proven by the operator's probe before `Programmed`.
+- An opt-in automatic engine rollout, and the client IP behind an HTTP load balancer
+  ([Client IP](/docs/client-ip/)).
+- `body.grpc: Deny`, and gRPC, rule reloading and connection limits in the standalone proxy
+  ([gRPC](/docs/grpc/)).
+- Seeing what happens ([Monitoring](/docs/monitoring/)): where a rule matched, in events and
+  `inkwallctl test`; `inkwallctl status`; the cluster's state on the `InkwallConfig`; policy
+  condition metrics and Events; a monitoring kit with alerts and a dashboard; health checks for
+  Argo CD and Flux; redacted event snippets; one denial response, with `X-Request-Id`, everywhere.
+- Less memory and more scale: the Core Rule Set compiled once for every paranoia level, threshold
+  and body limit; the wiring controller in the scale test, up to 5,000 VirtualServices.
+- The chart: a values schema, private registries, NetworkPolicies, Helm 4.
+- Tested harder: the CRS suite through every adapter, an adapter parity test, upgrades through more
+  proxies, nightly release qualification, stress and failure-mode runs; a supply chain that refuses
+  a tag without green CI and verifies what it published.
+
+## v0.6.0: assistants, next
+
+The [milestone](https://github.com/inkwall-dev/inkwall/milestone/18):
+
+- `inkwallctl explain`, for a denied request or a policy that isn't `Ready`
+  ([#438](https://github.com/inkwall-dev/inkwall/issues/438)), and an MCP server with read-only
+  tools for AI assistants ([#439](https://github.com/inkwall-dev/inkwall/issues/439)), from a design
+  ([#437](https://github.com/inkwall-dev/inkwall/issues/437)).
+- Responses through HAProxy ([#469](https://github.com/inkwall-dev/inkwall/issues/469),
+  [#470](https://github.com/inkwall-dev/inkwall/issues/470)), and through Traefik and the reverse
+  proxy, with streamed responses ([#323](https://github.com/inkwall-dev/inkwall/issues/323)).
+- gRPC streams inspected per message
+  ([#315](https://github.com/inkwall-dev/inkwall/issues/315)), and the server's messages
+  ([#317](https://github.com/inkwall-dev/inkwall/issues/317)).
+- HAProxy bodies past its buffer ([#336](https://github.com/inkwall-dev/inkwall/issues/336)); rule
+  sets loaded before the Core Rule Set ([#423](https://github.com/inkwall-dev/inkwall/issues/423));
+  the operator's metrics over HTTPS ([#430](https://github.com/inkwall-dev/inkwall/issues/430));
+  `Detect`-mode Istio routes proven by the probe
+  ([#475](https://github.com/inkwall-dev/inkwall/issues/475)).
+
 ## v1.0.0: a stable API
 
 The CRDs out of `v1alpha1`, with an upgrade path and a compatibility promise.
@@ -148,8 +194,8 @@ The CRDs out of `v1alpha1`, with an upgrade path and a compatibility promise.
 
 - WebSocket messages through Envoy (Envoy Gateway, Istio, raw Envoy), which needs a change in
   Envoy's `ext_proc` ([#313](https://github.com/inkwall-dev/inkwall/issues/313)).
-- Responses through Traefik and Istio, and streamed responses
-  ([#323](https://github.com/inkwall-dev/inkwall/issues/323)).
+- gRPC messages read with their schema
+  ([#316](https://github.com/inkwall-dev/inkwall/issues/316)).
 - Protecting LLM APIs against the OWASP Top 10 for LLM applications
   ([#277](https://github.com/inkwall-dev/inkwall/issues/277)).
 - Caddy (a module).
