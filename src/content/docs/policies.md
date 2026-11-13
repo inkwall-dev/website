@@ -97,7 +97,7 @@ the bundle, but not wired (`ControllerUnsupported`). The proxy needs the Gateway
 - **Istio** (1.28 or later): its Gateway API implementation (on by default) and the Gateway API
   CRDs. The operator adds the engine to a Gateway's pods through the ConfigMap the Gateway names,
   and an `EnvoyFilter` sends the protected routes to it
-  ([Istio](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/istio.md)). Since 0.5.0, a
+  ([Istio](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/istio.md)). Since 0.5.0, a
   route is `Programmed` only once the operator's probe has passed through every gateway pod
   ([below](#status)).
 
@@ -118,7 +118,7 @@ The ingress gateway's pods (labelled `istio: ingressgateway`) get the engine fro
 when they are created: restart those that ran before Inkwall. Their filters are split over the
 `EnvoyFilter` objects `inkwall-istio-ingress-00` to `-31`, so thousands of VirtualServices fit
 under etcd's size limit. See
-[VirtualServices](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/istio.md#virtualservices).
+[VirtualServices](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/istio.md#virtualservices).
 
 ### Core Rule Set settings
 
@@ -204,7 +204,7 @@ attack got back is its own event. Envoy Gateway and, since 0.5.0, Istio send res
 engine: on a Traefik or HAProxy route, such a policy is `Programmed=False`
 (`ResponsesNotInspected`), naming the routes, while their requests are still inspected. It costs about 0.85 ms of engine CPU per KiB of response, so a route of large HTML pages
 is CPU-bound in the engine: raise `timeout` with `maxBytes`, and measure first
-([response inspection](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/design/0006-adapter-protocols.md#response-inspection-v040)).
+([response inspection](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/design/0006-adapter-protocols.md#response-inspection-v040)).
 
 ### WebSocket handshakes
 
@@ -222,7 +222,7 @@ gets 403 before the upgrade in `Block` mode, and is logged with reason `websocke
 mode. `allowMissingOrigin: true` lets a client that sends no `Origin` through. The handshake's URL
 and headers are inspected by the rules through every proxy; the messages after the upgrade are not,
 except by the engine's own reverse proxy
-([WebSocket](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/websocket.md)).
+([WebSocket](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/websocket.md)).
 
 ### Engines too old for a policy
 

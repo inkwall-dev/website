@@ -5,7 +5,7 @@ order: 2.5
 ---
 
 One `WAFPolicy` works through every proxy, but each proxy's hook sees a different part of the
-traffic. This page is v0.5.0's.
+traffic. This page is v0.5.1's.
 
 ## What each proxy inspects
 
@@ -39,7 +39,7 @@ status says so.
   Since 0.5.0, it sends responses to the engine as Envoy Gateway does, and a route is `Programmed`
   only once the operator's signed probe has passed through every gateway pod, on every listener
   the route is served on (`Unverified` until then; `NotProbeable` for a route the probe can't
-  reach). See [Istio](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/istio.md).
+  reach). See [Istio](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/istio.md).
 - **The HAProxy Kubernetes Ingress Controller** (since v0.4.0, 3.1 or later): its `Ingress` routes.
   Its pods get the engine from the Pod webhook (restart them once Inkwall is installed), and each
   protected Ingress a backend snippet of its own. The policy is `Programmed` only once the
@@ -47,7 +47,7 @@ status says so.
   engine at most its buffer of a body (about 15 KiB by default): when a policy's `body.maxBytes` is
   larger, `Programmed`'s message names the limit, and a larger body is handled as oversized. Raise
   `tune.bufsize` in the controller ConfigMap's `global-config-snippet` to inspect more. See
-  [HAProxy](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/haproxy.md#with-the-operator-haproxy-kubernetes-ingress-controller).
+  [HAProxy](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/haproxy.md#with-the-operator-haproxy-kubernetes-ingress-controller).
 
 Each integration has a `ClusterRole` of its own, granted by a chart value
 (`rbac.integrations.traefik`, `envoyGateway`, `istio`, `istioIngress`, `haproxy`, all `true` by
@@ -62,11 +62,11 @@ Traefik, HAProxy and Istio ingress gateway pods it injects itself, one at a time
   `envoy.yaml` and calls `inkwall-engine ext-proc` next to it. The policy comes from the engine's
   flags, or from the operator's bundles in a cluster with the operator. With
   `--inspect-responses`, it inspects responses too. See
-  [protecting raw Envoy](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/raw-envoy.md).
+  [protecting raw Envoy](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/raw-envoy.md).
 - **HAProxy** (since v0.4.0, 3.1 or later): an HAProxy you configure yourself sends each request to
   `inkwall-engine spoe`, an agent of its Stream Processing Offload Engine, on `127.0.0.1:9004` or a
   Unix socket, and its rules act on the verdict. See
-  [protecting HAProxy](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/haproxy.md).
+  [protecting HAProxy](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/haproxy.md).
 - **The engine as a reverse proxy**: `inkwall-engine proxy` in front of any HTTP service, in or out
   of Kubernetes ([Getting started](/docs/getting-started/)). Since 0.5.0 it speaks HTTP/2 and gRPC
   on both sides, reloads its rules without a restart, and limits long-lived connections.
@@ -92,4 +92,4 @@ SPOE are asked once per request, so they never see the messages. Since 0.5.0, ea
 scored on its own, not on top of the handshake's score: fewer false positives, and about a third
 less work per message. `--websocket-idle-timeout` closes idle WebSockets, and on shutdown the
 proxy closes them with `1001`. See
-[WebSocket](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/websocket.md).
+[WebSocket](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/websocket.md).

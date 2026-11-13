@@ -1,6 +1,6 @@
 ---
 title: Roadmap
-description: What each release ships, from v0.1.0 to v0.5.0, and what the next milestones bring.
+description: What each release ships, from v0.1.0 to v0.5.1, and what the next milestones bring.
 order: 11
 ---
 
@@ -165,6 +165,16 @@ The milestone ([release post](/blog/inkwall-v0-5-0/)), enhancements to what 0.4.
 - Tested harder: the CRS suite through every adapter, an adapter parity test, upgrades through more
   proxies, nightly release qualification, stress and failure-mode runs; a supply chain that refuses
   a tag without green CI and verifies what it published.
+
+## v0.5.1: security fixes
+
+A security release for 0.5 ([release post](/blog/inkwall-v0-5-1/)):
+
+- [GHSA-839p-9ccr-29jj](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-839p-9ccr-29jj)
+  (low): through Envoy Gateway, Istio and raw Envoy, a request carrying a valid operator probe
+  header passed uninspected and unlogged on routes whose policies are in `Detect` mode. The engine
+  now inspects it like any other.
+- Built with Go 1.27.4, for [GO-2026-6859](https://pkg.go.dev/vuln/GO-2026-6859) in `net/http`.
 
 ## v0.6.0: assistants, next
 
