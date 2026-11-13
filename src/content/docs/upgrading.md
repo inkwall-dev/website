@@ -1,11 +1,13 @@
 ---
 title: Upgrading
-description: Upgrade from 0.4.x to 0.5.0, from 0.4.0 to 0.4.1, from 0.3.2 to 0.3.3, from 0.2.2 to 0.2.3, from 0.3.x to 0.4.0, from 0.3.1 to 0.3.2, from 0.3.0 to 0.3.1, and from 0.2.x to 0.3.0, what to check first, what changes by itself, protecting HTTPRoutes, and how to roll back.
+description: Upgrade from 0.5.0 to 0.5.1, from 0.4.x to 0.5.0, from 0.4.0 to 0.4.1, from 0.3.2 to 0.3.3, from 0.2.2 to 0.2.3, from 0.3.x to 0.4.0, from 0.3.1 to 0.3.2, from 0.3.0 to 0.3.1, and from 0.2.x to 0.3.0, what to check first, what changes by itself, protecting HTTPRoutes, and how to roll back.
 order: 2
 ---
 
-The latest release is **0.5.0**. From any 0.4 release, upgrade straight to 0.5.0 as
-[below](#from-04x-to-050); what changed in 0.4.1 is in [From 0.4.0 to 0.4.1](#from-040-to-041).
+The latest release is **0.5.1**, a security patch release for 0.5. From 0.5.0, upgrade as
+[below](#from-050-to-051). From any 0.4 release, upgrade straight to 0.5.1, with `--version 0.5.1`
+in the commands of [From 0.4.x to 0.5.0](#from-04x-to-050), and read both sections; what changed
+in 0.4.1 is in [From 0.4.0 to 0.4.1](#from-040-to-041).
 From any 0.3 release, upgrade to 0.4.1 first, with `--version 0.4.1` in the commands of
 [From 0.3.x to 0.4.0](#from-03x-to-040), and read both sections; to stay on 0.3, upgrade to 0.3.3
 as in [From 0.3.2 to 0.3.3](#from-032-to-033).
@@ -14,7 +16,35 @@ From any 0.2 release, upgrade to 0.3.0 first, as in
 release, as in [From 0.2.2 to 0.2.3](#from-022-to-023). From 0.1.x, upgrade to 0.2.3 first, then
 to 0.3.0. The
 full guide is
-[`docs/upgrading.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/upgrading.md).
+[`docs/upgrading.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/upgrading.md).
+
+## From 0.5.0 to 0.5.1
+
+0.5.1 is a patch release with security fixes and no API or chart change: upgrade the chart as for
+0.5.0, then restart the proxies whose pods run the engine (Traefik, Istio's ingress gateways and
+HAProxy; Istio rolls its Gateway API gateways and Envoy Gateway re-creates its own) so their
+engines are 0.5.1, or let `spec.engine.rollout: Automatic` do it:
+
+```sh
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.5.1 \
+  --namespace inkwall-system --reset-then-reuse-values
+kubectl -n inkwall-system rollout status deployment/inkwall-operator
+kubectl -n <traefik namespace> rollout restart deployment/<traefik>
+```
+
+What changes by itself:
+
+- **Through Envoy, `Detect` mode inspects requests that carry the probe header.** In `Detect`
+  mode Envoy ignores the engine's answer to the operator's probe and forwards the request, so a
+  request carrying a valid probe header reached the application without being inspected or
+  logged ([GHSA-839p-9ccr-29jj](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-839p-9ccr-29jj)).
+  The engine now inspects and logs it like any other request, through Envoy Gateway, Istio and raw
+  Envoy. `Block` mode is unchanged, and `Detect`-mode routes through Istio and Envoy Gateway stay
+  `Unverified`, as in 0.5.0.
+- **Built with Go 1.27.4**, for
+  [GO-2026-6859](https://pkg.go.dev/vuln/GO-2026-6859): an HTTP/1 server using `net/http`'s
+  `MaxBytesReader` could panic when its limit was exceeded while the handler wrote headers. The
+  engine's and the operator's HTTP servers use it.
 
 ## From 0.4.x to 0.5.0
 
@@ -526,5 +556,5 @@ Roll back to 0.2.2 rather than 0.2.0 or 0.2.1, which are affected by GHSA-r5cq-6
 Upgrade to 0.2.2 first. On the way, every `WAFPolicy` gets the finalizer `waf.inkwall.dev/unwire`
 (from 0.1.0), which matters if Argo CD or Flux manages them ([GitOps](/docs/gitops/)), and bundles
 past 900 KiB compressed are split into chunk Secrets, which 0.1.x can't read. The full guide's
-[0.1.x section](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/upgrading.md#from-01x-to-022)
+[0.1.x section](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/upgrading.md#from-01x-to-022)
 lists every change and how to roll back.

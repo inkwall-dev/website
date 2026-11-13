@@ -4,7 +4,7 @@ description: Install Inkwall with Helm, protect a Traefik or Envoy Gateway route
 order: 1
 ---
 
-> Inkwall v0.5.0 works with **Traefik** (`Ingress`, `IngressRoute` and Gateway API `HTTPRoute`
+> Inkwall v0.5.1 works with **Traefik** (`Ingress`, `IngressRoute` and Gateway API `HTTPRoute`
 > routes), **Envoy Gateway** and **Istio** (`HTTPRoute` routes, and Istio's `VirtualService`
 > routes), and the **HAProxy Kubernetes Ingress Controller** (`Ingress` routes); and, without the
 > operator, with an Envoy or HAProxy you configure yourself. What each one inspects is on
@@ -12,15 +12,15 @@ order: 1
 > `v1alpha1` and will change. Upgrading from 0.4.x? See [Upgrading](/docs/upgrading/).
 
 To try it on your laptop first, the
-[quickstart](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/quickstart.md) goes from
+[quickstart](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/quickstart.md) goes from
 nothing to a blocked attack in about five minutes, on a kind cluster with the released chart,
-Traefik and a demo app; [`examples/`](https://github.com/inkwall-dev/inkwall/tree/v0.5.0/examples)
+Traefik and a demo app; [`examples/`](https://github.com/inkwall-dev/inkwall/tree/v0.5.1/examples)
 has the same app behind Traefik, Envoy Gateway and Istio.
 
 ## Install
 
 ```sh
-helm install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.5.0 \
+helm install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.5.1 \
   --namespace inkwall-system --create-namespace
 kubectl -n inkwall-system rollout status deployment/inkwall-operator
 ```
@@ -110,7 +110,7 @@ Images, the chart and the binaries' checksums are signed keyless with cosign, fr
 workflow. Verify them with cosign v3 or later: cosign v2 reports `no signatures found`.
 
 ```sh
-cosign verify ghcr.io/inkwall-dev/inkwall-engine:0.5.0 \
+cosign verify ghcr.io/inkwall-dev/inkwall-engine:0.5.1 \
   --certificate-identity-regexp '^https://github.com/inkwall-dev/inkwall/\.github/workflows/release\.yaml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
@@ -156,7 +156,7 @@ Each blocked or detected request logs one JSON line with the rule IDs and where 
 (`942100@ARGS:q`, never the value), at most 10 lines per second for each policy and rule; metrics are on
 `:9480/metrics`. The proxy accepts only origin-form request targets (`GET /path`): an absolute-form
 target (`GET http://host/path`) or an invalid `Host` gets a 400. The guide,
-[running the engine without Kubernetes](https://github.com/inkwall-dev/inkwall/blob/v0.5.0/docs/standalone-proxy.md),
+[running the engine without Kubernetes](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/standalone-proxy.md),
 also covers the engine's `forward-auth`, `check`, `ext-proc` (Envoy's external processing API over
 gRPC) and `spoe` (HAProxy's SPOE) modes; see [Proxies](/docs/proxies/).
 
