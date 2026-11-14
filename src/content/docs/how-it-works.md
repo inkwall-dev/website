@@ -11,7 +11,7 @@ down, engines keep enforcing the last policy they received.
 
 ## The operator
 
-In v0.5.1, with Traefik, Envoy Gateway, Istio and the HAProxy Kubernetes Ingress Controller:
+In v0.5.2, with Traefik, Envoy Gateway, Istio and the HAProxy Kubernetes Ingress Controller:
 
 1. **Validates** policies and rule sets when you save them, compiling the rules with the engine's
    own Coraza version.
@@ -77,7 +77,7 @@ and a rollout of 5 pods writes each policy's status 4 times instead of 20. At 5,
 didn't fit before (the ingress gateways' one `EnvoyFilter` passed etcd's size limit at about 1,200
 VirtualServices; it is sharded now), every policy was wired in 22 s, a reconcile took 0.5 s, and the
 operator peaked at 449 MiB. The measurements are in the
-[operator design](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/design/0004-operator.md#8-scale-targets-v1).
+[operator design](https://github.com/inkwall-dev/inkwall/blob/v0.5.2/docs/design/0004-operator.md#8-scale-targets-v1).
 
 ## The engine
 

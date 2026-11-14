@@ -11,7 +11,7 @@ and every security event would carry its address. With Envoy Gateway, see
 [Envoy Gateway](#envoy-gateway); behind an HTTP load balancer that adds `X-Forwarded-For`, such as
 an AWS ALB, see [Behind an HTTP load balancer](#behind-an-http-load-balancer). The full guide, with
 more load balancers, is
-[`docs/client-ip.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/client-ip.md).
+[`docs/client-ip.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.2/docs/client-ip.md).
 
 ## How the address reaches the engine
 

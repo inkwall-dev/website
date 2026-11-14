@@ -5,10 +5,10 @@ order: 6.5
 ---
 
 From v0.5.0, Inkwall says what it is doing in one command, in each policy's status, in its security
-events and in its metrics. This page is v0.5.1's. The full guides are
-[`docs/troubleshooting.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/troubleshooting.md),
+events and in its metrics. This page is v0.5.2's. The full guides are
+[`docs/troubleshooting.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.2/docs/troubleshooting.md),
 with every condition reason and what to do about it, and
-[`docs/monitoring.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/monitoring.md), with
+[`docs/monitoring.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.2/docs/monitoring.md), with
 every metric and a runbook for each alert.
 
 ## Cluster status
@@ -19,7 +19,7 @@ context, and only reads:
 ```console
 $ inkwallctl status
 InkwallConfig: mode Standalone, suspended no
-Operator: 2/2 replicas ready in inkwall-system, version 0.5.1
+Operator: 2/2 replicas ready in inkwall-system, version 0.5.2
 Bundle: version 7, 4096 bytes compressed
 
 Proxies:
@@ -32,7 +32,7 @@ Policies: 2 of 2 Ready
 
 Engines: 2 connected
   VERSION  CURRENT  BEHIND  REJECTED
-  v0.5.1   2        0       0
+  v0.5.2   2        0       0
 
 OK: nothing needs attention.
 ```
@@ -99,7 +99,7 @@ The chart ships a Prometheus Operator ServiceMonitor for the operator, a PodMoni
 alerts and a Grafana dashboard, all off by default. With the Prometheus Operator in the cluster:
 
 ```sh
-helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.5.1 \
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.5.2 \
   --namespace inkwall-system --reset-then-reuse-values \
   --set metrics.serviceMonitor.enabled=true \
   --set metrics.podMonitor.enabled=true \
