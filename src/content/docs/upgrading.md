@@ -1,13 +1,14 @@
 ---
 title: Upgrading
-description: Upgrade from 0.5.0 to 0.5.1, from 0.4.x to 0.5.0, from 0.4.0 to 0.4.1, from 0.3.2 to 0.3.3, from 0.2.2 to 0.2.3, from 0.3.x to 0.4.0, from 0.3.1 to 0.3.2, from 0.3.0 to 0.3.1, and from 0.2.x to 0.3.0, what to check first, what changes by itself, protecting HTTPRoutes, and how to roll back.
+description: Upgrade from 0.5.1 to 0.5.2, from 0.5.0 to 0.5.1, from 0.4.x to 0.5.0, from 0.4.0 to 0.4.1, from 0.3.2 to 0.3.3, from 0.2.2 to 0.2.3, from 0.3.x to 0.4.0, from 0.3.1 to 0.3.2, from 0.3.0 to 0.3.1, and from 0.2.x to 0.3.0, what to check first, what changes by itself, protecting HTTPRoutes, and how to roll back.
 order: 2
 ---
 
-The latest release is **0.5.1**, a security patch release for 0.5. From 0.5.0, upgrade as
-[below](#from-050-to-051). From any 0.4 release, upgrade straight to 0.5.1, with `--version 0.5.1`
-in the commands of [From 0.4.x to 0.5.0](#from-04x-to-050), and read both sections; what changed
-in 0.4.1 is in [From 0.4.0 to 0.4.1](#from-040-to-041).
+The latest release is **0.5.2**, a security patch release for 0.5. From 0.5.1, upgrade as
+[below](#from-051-to-052); from 0.5.0, upgrade straight to 0.5.2 and read
+[From 0.5.0 to 0.5.1](#from-050-to-051) too. From any 0.4 release, upgrade straight to 0.5.2, with
+`--version 0.5.2` in the commands of [From 0.4.x to 0.5.0](#from-04x-to-050), and read the three
+sections; what changed in 0.4.1 is in [From 0.4.0 to 0.4.1](#from-040-to-041).
 From any 0.3 release, upgrade to 0.4.1 first, with `--version 0.4.1` in the commands of
 [From 0.3.x to 0.4.0](#from-03x-to-040), and read both sections; to stay on 0.3, upgrade to 0.3.3
 as in [From 0.3.2 to 0.3.3](#from-032-to-033).
@@ -16,7 +17,37 @@ From any 0.2 release, upgrade to 0.3.0 first, as in
 release, as in [From 0.2.2 to 0.2.3](#from-022-to-023). From 0.1.x, upgrade to 0.2.3 first, then
 to 0.3.0. The
 full guide is
-[`docs/upgrading.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/upgrading.md).
+[`docs/upgrading.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.2/docs/upgrading.md).
+
+## From 0.5.1 to 0.5.2
+
+0.5.2 is a patch release with one security fix and no API change: upgrade the chart as for 0.5.1.
+The operator updates the HAProxy Ingresses' snippets by itself, so nothing needs a restart for this
+fix:
+
+```sh
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.5.2 \
+  --namespace inkwall-system --reset-then-reuse-values
+kubectl -n inkwall-system rollout status deployment/inkwall-operator
+```
+
+What changes by itself:
+
+- **Through HAProxy, a request too large for one SPOE frame is handled as oversized.** HAProxy
+  sends each request to the engine in one frame, and a request that doesn't fit isn't sent at all.
+  With `tune.bufsize` raised above the engine's frame size, such a request had no verdict, so a
+  `Block`-mode policy with `failureMode: Open` let it through uninspected
+  ([GHSA-4w3f-28c3-cc6g](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-4w3f-28c3-cc6g)).
+  It is now handled as `body.onOversize` says: 413 for `Block`-mode policies, whatever the failure
+  mode.
+
+With HAProxy configured by hand, add the new rule of the example configuration before the
+fail-closed rule, and leave it out in detect mode
+([the complete haproxy.cfg](https://github.com/inkwall-dev/inkwall/blob/v0.5.2/docs/haproxy.md#the-complete-haproxycfg)):
+
+```haproxy
+http-request deny deny_status 413 if { var(txn.inkwall.error) -m int 3 259 }
+```
 
 ## From 0.5.0 to 0.5.1
 
@@ -556,5 +587,5 @@ Roll back to 0.2.2 rather than 0.2.0 or 0.2.1, which are affected by GHSA-r5cq-6
 Upgrade to 0.2.2 first. On the way, every `WAFPolicy` gets the finalizer `waf.inkwall.dev/unwire`
 (from 0.1.0), which matters if Argo CD or Flux manages them ([GitOps](/docs/gitops/)), and bundles
 past 900 KiB compressed are split into chunk Secrets, which 0.1.x can't read. The full guide's
-[0.1.x section](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/upgrading.md#from-01x-to-022)
+[0.1.x section](https://github.com/inkwall-dev/inkwall/blob/v0.5.2/docs/upgrading.md#from-01x-to-022)
 lists every change and how to roll back.

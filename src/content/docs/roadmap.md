@@ -1,6 +1,6 @@
 ---
 title: Roadmap
-description: What each release ships, from v0.1.0 to v0.5.1, and what the next milestones bring.
+description: What each release ships, from v0.1.0 to v0.5.2, and what the next milestones bring.
 order: 11
 ---
 
@@ -175,6 +175,15 @@ A security release for 0.5 ([release post](/blog/inkwall-v0-5-1/)):
   header passed uninspected and unlogged on routes whose policies are in `Detect` mode. The engine
   now inspects it like any other.
 - Built with Go 1.27.4, for [GO-2026-6859](https://pkg.go.dev/vuln/GO-2026-6859) in `net/http`.
+
+## v0.5.2: an HAProxy security fix
+
+A security release for 0.5 ([release post](/blog/inkwall-v0-5-2/)):
+
+- [GHSA-4w3f-28c3-cc6g](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-4w3f-28c3-cc6g)
+  (low): through HAProxy with `tune.bufsize` raised above the engine's frame size, a request too
+  large for one SPOE frame passed uninspected when a `Block`-mode policy failed open. It is now
+  handled as oversized, as `body.onOversize` says (413 in `Block` mode).
 
 ## v0.6.0: assistants, next
 

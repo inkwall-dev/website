@@ -7,11 +7,11 @@ const pages = (await getCollection('docs')).sort((a, b) => a.data.order - b.data
 <Docs title="Docs" description="Inkwall documentation: getting started, upgrading, how it works, policies, operations, guides and the roadmap.">
   <h1>Documentation</h1>
   <p class="lede">
-    These pages cover Inkwall v0.5.1: Traefik with Ingress, IngressRoute and HTTPRoute routes, Envoy Gateway and Istio with HTTPRoute routes, Istio's VirtualServices, and the HAProxy Kubernetes Ingress Controller's Ingresses, installed with Helm; and an Envoy or HAProxy you configure yourself. What isn't built yet
-    is on the <a href="/docs/roadmap/">roadmap</a>. The <a href="https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/README.md">docs
+    These pages cover Inkwall v0.5.2: Traefik with Ingress, IngressRoute and HTTPRoute routes, Envoy Gateway and Istio with HTTPRoute routes, Istio's VirtualServices, and the HAProxy Kubernetes Ingress Controller's Ingresses, installed with Helm; and an Envoy or HAProxy you configure yourself. What isn't built yet
+    is on the <a href="/docs/roadmap/">roadmap</a>. The <a href="https://github.com/inkwall-dev/inkwall/blob/v0.5.2/docs/README.md">docs
     index</a> and the design documents in the
-    <a href="https://github.com/inkwall-dev/inkwall/tree/v0.5.1/docs/design">main repository</a> go deeper, and its
-    <a href="https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/glossary.md">glossary</a> defines Inkwall's terms.
+    <a href="https://github.com/inkwall-dev/inkwall/tree/v0.5.2/docs/design">main repository</a> go deeper, and its
+    <a href="https://github.com/inkwall-dev/inkwall/blob/v0.5.2/docs/glossary.md">glossary</a> defines Inkwall's terms.
   </p>
   <ul class="toc">
     {pages.map((p) => (

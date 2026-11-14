@@ -7,7 +7,7 @@ order: 7
 Your `WAFPolicy` and rule set objects belong in Git, like your routes. To protect a route, though,
 the operator writes to it, and a GitOps tool that sets the same field reports drift and undoes it.
 This page lists what the operator writes and how to configure Argo CD and Flux; the full guide is
-[`docs/gitops.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/gitops.md).
+[`docs/gitops.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.2/docs/gitops.md).
 
 ## What the operator writes
 
@@ -164,7 +164,7 @@ The operator also writes to the chart's webhook configurations: the `failurePoli
 policy blocks) and `objectSelector` (which selects no pod while Traefik's integration is disabled)
 of `inkwall-operator-mutating`, and the `caBundle` of both
 webhook configurations. Ignore those fields in the Application or `HelmRelease` that installs the
-chart; the [guide](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/gitops.md#installing-the-chart-with-a-gitops-tool)
+chart; the [guide](https://github.com/inkwall-dev/inkwall/blob/v0.5.2/docs/gitops.md#installing-the-chart-with-a-gitops-tool)
 has both configurations.
 
 Keep the `InkwallConfig` and your policies apart from the chart (another Application, or a
@@ -178,8 +178,8 @@ Flux asks the cluster only when it upgrades the release, so a proxy installed la
 until the next change. For the same reason, list your proxy namespaces in
 `injection.proxyNamespaces` yourself: the chart's check for engine pods outside them can't run
 when Argo CD renders it. The chart README covers
-[proxy namespaces](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/deploy/helm/inkwall/README.md#proxy-namespaces)
-and [integration permissions](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/deploy/helm/inkwall/README.md#integration-permissions).
+[proxy namespaces](https://github.com/inkwall-dev/inkwall/blob/v0.5.2/deploy/helm/inkwall/README.md#proxy-namespaces)
+and [integration permissions](https://github.com/inkwall-dev/inkwall/blob/v0.5.2/deploy/helm/inkwall/README.md#integration-permissions).
 
 ## Check it worked
 
@@ -202,15 +202,15 @@ they are applied, and Flux counts a policy the operator hasn't reported on yet a
 the repository has health checks for both:
 
 - **Argo CD:** merge
-  [`examples/argocd/argocd-cm-patch.yaml`](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/examples/argocd/argocd-cm-patch.yaml)
+  [`examples/argocd/argocd-cm-patch.yaml`](https://github.com/inkwall-dev/inkwall/blob/v0.5.2/examples/argocd/argocd-cm-patch.yaml)
   into the `argocd-cm` ConfigMap (or the `configs.cm` values of Argo CD's chart).
 - **Flux** (2.5 or later): give the Kustomization that applies the policies `wait: true` and the
   `healthCheckExprs` of
-  [`examples/flux/kustomization.yaml`](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/examples/flux/kustomization.yaml).
+  [`examples/flux/kustomization.yaml`](https://github.com/inkwall-dev/inkwall/blob/v0.5.2/examples/flux/kustomization.yaml).
 
 A `WAFPolicy` is then healthy once it is `Ready` for its generation, progressing while its reason
 resolves by itself (`PendingRestart`, `EnginesBehind`, `Unverified`...), and degraded for any other
 reason (`WiringFailed`, `EngineNack`, `EnginesOutdated`...); a rule set is degraded when its rules
 don't compile. While inspection is suspended, Argo CD shows the policies as `Suspended`. The
-[guide](https://github.com/inkwall-dev/inkwall/blob/v0.5.1/docs/gitops.md#health-in-argo-cd-and-flux)
+[guide](https://github.com/inkwall-dev/inkwall/blob/v0.5.2/docs/gitops.md#health-in-argo-cd-and-flux)
 has the whole table.
