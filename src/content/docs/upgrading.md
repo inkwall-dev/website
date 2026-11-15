@@ -1,23 +1,46 @@
 ---
 title: Upgrading
-description: Upgrade from 0.5.1 to 0.5.2, from 0.5.0 to 0.5.1, from 0.4.x to 0.5.0, from 0.4.0 to 0.4.1, from 0.3.2 to 0.3.3, from 0.2.2 to 0.2.3, from 0.3.x to 0.4.0, from 0.3.1 to 0.3.2, from 0.3.0 to 0.3.1, and from 0.2.x to 0.3.0, what to check first, what changes by itself, protecting HTTPRoutes, and how to roll back.
+description: Upgrade from 0.5.2 to 0.5.3, from 0.5.1 to 0.5.2, from 0.5.0 to 0.5.1, from 0.4.x to 0.5.0, from 0.4.1 to 0.4.2, from 0.4.0 to 0.4.1, from 0.3.2 to 0.3.3, from 0.2.2 to 0.2.3, from 0.3.x to 0.4.0, from 0.3.1 to 0.3.2, from 0.3.0 to 0.3.1, and from 0.2.x to 0.3.0, what to check first, what changes by itself, protecting HTTPRoutes, and how to roll back.
 order: 2
 ---
 
-The latest release is **0.5.2**, a security patch release for 0.5. From 0.5.1, upgrade as
-[below](#from-051-to-052); from 0.5.0, upgrade straight to 0.5.2 and read
-[From 0.5.0 to 0.5.1](#from-050-to-051) too. From any 0.4 release, upgrade straight to 0.5.2, with
-`--version 0.5.2` in the commands of [From 0.4.x to 0.5.0](#from-04x-to-050), and read the three
-sections; what changed in 0.4.1 is in [From 0.4.0 to 0.4.1](#from-040-to-041).
-From any 0.3 release, upgrade to 0.4.1 first, with `--version 0.4.1` in the commands of
-[From 0.3.x to 0.4.0](#from-03x-to-040), and read both sections; to stay on 0.3, upgrade to 0.3.3
-as in [From 0.3.2 to 0.3.3](#from-032-to-033).
+The latest release is **0.5.3**, a security patch release for 0.5. From 0.5.2, upgrade as
+[below](#from-052-to-053); from 0.5.0 or 0.5.1, upgrade straight to 0.5.3 and read the sections
+from your version on. From any 0.4 release, upgrade straight to 0.5.3, with `--version 0.5.3` in
+the commands of [From 0.4.x to 0.5.0](#from-04x-to-050), and read the four sections; what changed
+in 0.4.1 and 0.4.2 is in [From 0.4.0 to 0.4.1](#from-040-to-041) and
+[From 0.4.1 to 0.4.2](#from-041-to-042). To stay on 0.4, upgrade to 0.4.2, a patch release, as in
+[From 0.4.1 to 0.4.2](#from-041-to-042).
+From any 0.3 release, upgrade to 0.4.2 first, with `--version 0.4.2` in the commands of
+[From 0.3.x to 0.4.0](#from-03x-to-040), and read the sections after it; to stay on 0.3, upgrade to
+0.3.3 as in [From 0.3.2 to 0.3.3](#from-032-to-033).
 From any 0.2 release, upgrade to 0.3.0 first, as in
 [From 0.2.x to 0.3.0](#from-02x-to-030); to stay on 0.2, upgrade to 0.2.3, a security patch
 release, as in [From 0.2.2 to 0.2.3](#from-022-to-023). From 0.1.x, upgrade to 0.2.3 first, then
 to 0.3.0. The
 full guide is
-[`docs/upgrading.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.2/docs/upgrading.md).
+[`docs/upgrading.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.3/docs/upgrading.md).
+
+## From 0.5.2 to 0.5.3
+
+0.5.3 is a patch release with one security fix and no API or chart change: upgrade the chart as for
+0.5.2. Only the engine injected into Traefik changes, so restart Traefik's pods so their engines are
+0.5.3, or let `spec.engine.rollout: Automatic` do it:
+
+```sh
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.5.3 \
+  --namespace inkwall-system --reset-then-reuse-values
+kubectl -n inkwall-system rollout status deployment/inkwall-operator
+kubectl -n <traefik namespace> rollout restart deployment/<traefik>
+```
+
+What changes by itself:
+
+- **Through Traefik (ForwardAuth), an invalid `X-Forwarded-Host` is logged by name, not value.**
+  The request is still refused with 400, but the engine's error log line no longer quotes the
+  header's value, as for every other parse error since 0.5.0
+  ([GHSA-m382-qw6g-4qmj](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-m382-qw6g-4qmj),
+  updated to name 0.5.0 to 0.5.2 through Traefik).
 
 ## From 0.5.1 to 0.5.2
 
@@ -43,7 +66,7 @@ What changes by itself:
 
 With HAProxy configured by hand, add the new rule of the example configuration before the
 fail-closed rule, and leave it out in detect mode
-([the complete haproxy.cfg](https://github.com/inkwall-dev/inkwall/blob/v0.5.2/docs/haproxy.md#the-complete-haproxycfg)):
+([the complete haproxy.cfg](https://github.com/inkwall-dev/inkwall/blob/v0.5.3/docs/haproxy.md#the-complete-haproxycfg)):
 
 ```haproxy
 http-request deny deny_status 413 if { var(txn.inkwall.error) -m int 3 259 }
@@ -190,6 +213,30 @@ Nothing below changes a policy you have: the new fields and settings are off unl
   body limits share one compiled Core Rule Set.
 - **Helm 4**: the chart keeps the operator's Pod webhook settings on upgrade. With Helm 4, roll
   back to 0.4.x with `helm rollback --force-conflicts`.
+
+## From 0.4.1 to 0.4.2
+
+0.4.2 is a patch release with no API or chart change: upgrade the chart as for 0.4.1, then restart
+the pods that run the engine (Traefik, Istio's Gateways, HAProxy and the Envoy Gateway proxies) so
+their engines are 0.4.2:
+
+```sh
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.4.2 \
+  --namespace inkwall-system --reset-then-reuse-values
+kubectl -n inkwall-system rollout status deployment/inkwall-operator
+kubectl -n <traefik namespace> rollout restart deployment/<traefik>
+```
+
+What changes by itself:
+
+- **Built with Go 1.27.4**, for
+  [GO-2026-6859](https://pkg.go.dev/vuln/GO-2026-6859), as 0.5.1 is: an HTTP/1 server using
+  `net/http`'s `MaxBytesReader` could panic when its limit was exceeded while the handler wrote
+  headers. The engine's and the operator's HTTP servers use it.
+
+0.4.x is not patched for
+[GHSA-m382-qw6g-4qmj](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-m382-qw6g-4qmj)
+(request values in the engine's parse-error log lines): upgrade to 0.5.3, or apply its workaround.
 
 ## From 0.4.0 to 0.4.1
 
@@ -587,5 +634,5 @@ Roll back to 0.2.2 rather than 0.2.0 or 0.2.1, which are affected by GHSA-r5cq-6
 Upgrade to 0.2.2 first. On the way, every `WAFPolicy` gets the finalizer `waf.inkwall.dev/unwire`
 (from 0.1.0), which matters if Argo CD or Flux manages them ([GitOps](/docs/gitops/)), and bundles
 past 900 KiB compressed are split into chunk Secrets, which 0.1.x can't read. The full guide's
-[0.1.x section](https://github.com/inkwall-dev/inkwall/blob/v0.5.2/docs/upgrading.md#from-01x-to-022)
+[0.1.x section](https://github.com/inkwall-dev/inkwall/blob/v0.5.3/docs/upgrading.md#from-01x-to-022)
 lists every change and how to roll back.

@@ -1,6 +1,6 @@
 ---
 title: Roadmap
-description: What each release ships, from v0.1.0 to v0.5.2, and what the next milestones bring.
+description: What each release ships, from v0.1.0 to v0.5.3, and what the next milestones bring.
 order: 11
 ---
 
@@ -184,6 +184,17 @@ A security release for 0.5 ([release post](/blog/inkwall-v0-5-2/)):
   (low): through HAProxy with `tune.bufsize` raised above the engine's frame size, a request too
   large for one SPOE frame passed uninspected when a `Block`-mode policy failed open. It is now
   handled as oversized, as `body.onOversize` says (413 in `Block` mode).
+
+## v0.5.3 and v0.4.2: security fixes
+
+Patch releases for the 0.5 and 0.4 lines ([release post](/blog/inkwall-v0-5-3-and-v0-4-2/)):
+
+- [GHSA-m382-qw6g-4qmj](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-m382-qw6g-4qmj)
+  (low, 0.5.3), updated: through Traefik (ForwardAuth), 0.5.0 to 0.5.2 still quoted an invalid
+  `X-Forwarded-Host` in the engine's error log. It is now logged by name, not value, as every
+  other parse error is. 0.4.x isn't patched for it.
+- 0.4.2 is built with Go 1.27.4, for [GO-2026-6859](https://pkg.go.dev/vuln/GO-2026-6859) in
+  `net/http`, as 0.5.1 is.
 
 ## v0.6.0: assistants, next
 
