@@ -1,15 +1,18 @@
 ---
 title: gRPC
-description: What the engine inspects in a gRPC call, reading the text in its messages, how a denied call is answered, gRPC through the standalone proxy, and refusing gRPC where none is served.
+description: What the engine inspects in a gRPC call, reading the text in its messages, long streams one message at a time, the server's messages, how a denied call is answered, gRPC through the standalone proxy, and refusing gRPC where none is served.
 order: 5.7
 ---
 
 gRPC calls are inspected on their path, query and metadata, through every proxy. From v0.4.0, a
 policy can have the text in their messages inspected too, a denied call is answered as gRPC
 (status 7, `PERMISSION_DENIED`), and gRPC-Web text calls are inspected as gRPC calls. From v0.5.0,
-the standalone proxy speaks gRPC, and a policy can refuse gRPC on routes that serve none. Before
+the standalone proxy speaks gRPC, and a policy can refuse gRPC on routes that serve none. From
+v0.6.0, through Envoy, a call's messages can be inspected one at a time as they arrive, so long
+streams and bidirectional calls work in `Block` mode, and what the server sends back can be
+inspected too. Before
 v0.3.1, the Core Rule Set denied every gRPC call in `Block` mode and logged it in `Detect` mode. The
-full guide is [`docs/grpc.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.2/docs/grpc.md).
+full guide is [`docs/grpc.md`](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/grpc.md).
 
 ## Which requests are gRPC calls
 
@@ -65,6 +68,64 @@ spec:
 An engine before 0.4.0 ignores the field: the policy is `Enforced=False` (`EnginesOutdated`) while
 one runs it.
 
+## Long streams, one message at a time
+
+From v0.6.0, through Envoy (Envoy Gateway, Istio, raw Envoy), a policy can have each message
+inspected on its own as it arrives, instead of the body Envoy buffers:
+
+```yaml
+spec:
+  body:
+    grpcMessages: Inspect
+    grpcStreams: PerMessage # default: Buffer
+```
+
+(The engine's flag, without the operator: `--grpc-streams per-message`, with Envoy's filter set to
+`allow_mode_override: true`; the operator sets it on the routes of such policies.)
+
+- **The call is decided on its path and metadata**, and reaches the application at once; each
+  message is then inspected as it completes, with the policy's rules and exclusions, up to
+  `body.maxBytes`. Long client streams and bidirectional calls work, however long they last.
+- **In `Block` mode** each message is held until it is inspected. A denied one ends the call with
+  its gRPC status and the request ID; the application never gets it nor any message after it.
+  **In `Detect` mode** each message is forwarded at once, and a flagged one logged with
+  `stream_event`, its index in the call.
+- **Why it is opt-in:** the messages before a denied one have already reached the application,
+  which may have acted on them. Choose `PerMessage` for routes with long client streams or
+  bidirectional calls, whose application already handles calls that fail midway, and keep
+  `Buffer` elsewhere.
+- **Cost:** each message is one evaluation, through the engine's admission control and the
+  policy's `timeout`: a flood of messages is shed with the failure mode (`UNAVAILABLE` in `Block`
+  mode by default), never queued.
+
+Through Traefik, HAProxy and the standalone proxy, which buffer the body, `PerMessage` inspects it
+as `Buffer` does. An engine before 0.6.0 ignores the field: the policy is `Enforced=False`
+(`EnginesOutdated`) while one runs it.
+
+## Server messages
+
+From v0.6.0, through Envoy, what a gRPC server sends back can be inspected for data leaks (a SQL
+error, a stack trace), when the policy inspects responses and their streams:
+
+```yaml
+spec:
+  responses:
+    inspect: true
+    streams: Inspect
+```
+
+- **Each message** of a response, unary or a server stream, is inspected on its own as it comes,
+  its text read as a request's is, with the response rules (the Core Rule Set's 95x data leakage
+  rules and your phase 3 and 4 rules). In `Block` mode a leaking one ends the call: the client
+  gets the messages before it, and the call fails.
+- **The call's status message** (`grpc-message`), where a server's error text goes, is inspected
+  too, as one more event. When the server answers with an error and nothing else, a leak there is
+  replaced by the engine's denial (`PERMISSION_DENIED`, with the request ID); when it comes in the
+  trailers after messages, the call ends before the client gets the status.
+
+Binary fields in a response can match a rule as a request's can: turn it on in `Detect` mode first.
+gRPC-Web responses aren't inspected this way, and Traefik never shows the engine a response.
+
 ## Denied calls
 
 A denied call is answered as gRPC: status 7 (`PERMISSION_DENIED`) and a message with the request
@@ -90,12 +151,14 @@ its whole request, or as much as the proxy buffers:
 
 - **Envoy Gateway and Istio**, in `Block` mode, hold the call until the client ends its side or the
   body fills Envoy's buffer. A bidirectional call whose client waits for the server before ending
-  its side stalls. Set `body.inspect: false` on the policy for such routes: Envoy then doesn't hold
-  the body, and the headers are still inspected.
+  its side stalls. Since 0.6.0, set `body.grpcStreams: PerMessage` for such routes
+  ([above](#long-streams-one-message-at-a-time)); or `body.inspect: false`, so Envoy doesn't hold
+  the body and only the headers are inspected.
 - **HAProxy** sends a body only with `option http-buffer-request`, up to its buffer (about 15 KiB by
   default): a call is held the same way, and a message past the buffer is an oversized body.
-- **Traefik**'s ForwardAuth reads the whole body before asking the engine, whatever the policy
-  says, and refuses bodies over 10 MiB (401). Bidirectional calls stall there too.
+- **Traefik** reads the whole body before asking the engine, whatever the policy says, and refuses
+  bodies over 10 MiB + 1 (413; 401 before Traefik v3.7, over 10 MiB). Bidirectional calls stall
+  there too, with `PerMessage` or not.
 - **The standalone proxy** reads up to `--max-body-bytes` of the body before it decides, then
   streams the rest: a call is held as through Envoy Gateway, and a bidirectional call whose client
   waits for the server stalls unless its path is in `--skip-body-paths`.

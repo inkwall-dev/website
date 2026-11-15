@@ -1,14 +1,14 @@
 ---
 title: Upgrading
-description: Upgrade from 0.5.1 to 0.5.2, from 0.5.0 to 0.5.1, from 0.4.x to 0.5.0, from 0.4.0 to 0.4.1, from 0.3.2 to 0.3.3, from 0.2.2 to 0.2.3, from 0.3.x to 0.4.0, from 0.3.1 to 0.3.2, from 0.3.0 to 0.3.1, and from 0.2.x to 0.3.0, what to check first, what changes by itself, protecting HTTPRoutes, and how to roll back.
+description: Upgrade from 0.5.x to 0.6.0, from 0.5.1 to 0.5.2, from 0.5.0 to 0.5.1, from 0.4.x to 0.5.0, from 0.4.0 to 0.4.1, from 0.3.2 to 0.3.3, from 0.2.2 to 0.2.3, from 0.3.x to 0.4.0, from 0.3.1 to 0.3.2, from 0.3.0 to 0.3.1, and from 0.2.x to 0.3.0, what to check first, what changes by itself, protecting HTTPRoutes, and how to roll back.
 order: 2
 ---
 
-The latest release is **0.5.2**, a security patch release for 0.5. From 0.5.1, upgrade as
-[below](#from-051-to-052); from 0.5.0, upgrade straight to 0.5.2 and read
-[From 0.5.0 to 0.5.1](#from-050-to-051) too. From any 0.4 release, upgrade straight to 0.5.2, with
-`--version 0.5.2` in the commands of [From 0.4.x to 0.5.0](#from-04x-to-050), and read the three
-sections; what changed in 0.4.1 is in [From 0.4.0 to 0.4.1](#from-040-to-041).
+The latest release is **0.6.0**. From any 0.5 release, upgrade straight to 0.6.0 as
+[below](#from-05x-to-060). From any 0.4 release, upgrade to 0.5.2 first, with `--version 0.5.2` in
+the commands of [From 0.4.x to 0.5.0](#from-04x-to-050), and read the 0.5 sections; what changed
+in 0.4.1 is in [From 0.4.0 to 0.4.1](#from-040-to-041). 0.6, 0.5 and 0.4 get fixes; 0.3 is out of
+support.
 From any 0.3 release, upgrade to 0.4.1 first, with `--version 0.4.1` in the commands of
 [From 0.3.x to 0.4.0](#from-03x-to-040), and read both sections; to stay on 0.3, upgrade to 0.3.3
 as in [From 0.3.2 to 0.3.3](#from-032-to-033).
@@ -17,7 +17,132 @@ From any 0.2 release, upgrade to 0.3.0 first, as in
 release, as in [From 0.2.2 to 0.2.3](#from-022-to-023). From 0.1.x, upgrade to 0.2.3 first, then
 to 0.3.0. The
 full guide is
-[`docs/upgrading.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.2/docs/upgrading.md).
+[`docs/upgrading.md`](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/upgrading.md).
+
+## From 0.5.x to 0.6.0
+
+Upgrade the chart, which upgrades the CRDs too, try it with `--dry-run` first, then restart the
+proxies whose pods run the engine so they run the 0.6.0 engine (Envoy Gateway and Istio roll their
+Gateways' pods themselves; with `InkwallConfig.spec.engine.rollout: Automatic` the operator
+restarts the pods it injects for you):
+
+```sh
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.6.0 \
+  --namespace inkwall-system --reset-then-reuse-values --dry-run
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.6.0 \
+  --namespace inkwall-system --reset-then-reuse-values
+kubectl -n inkwall-system rollout status deployment/inkwall-operator
+kubectl -n <traefik namespace> rollout restart deployment/<traefik>
+```
+
+Restart the HAProxy controller and Istio's ingress gateways the same way. Until a pod runs the
+0.6.0 engine, a policy that uses a 0.6.0 field is `Enforced=False` (`EnginesOutdated`). If you
+install the CRDs yourself, apply 0.6.0's first, as in [From 0.4.x to 0.5.0](#from-04x-to-050)
+with `--version 0.6.0`.
+
+**With Traefik, upgrade Traefik and its CRDs together to v3.7 or later** to get its faster
+Middleware ([below](#what-changes-by-itself-in-060)); before v3.7 nothing changes for Traefik.
+
+### What's new in 0.6.0
+
+Nothing below changes a policy you have: the new fields, flags and chart values are off unless you
+set them.
+
+- **Responses through HAProxy.** A policy with `responses.inspect` has the responses of its HAProxy
+  Kubernetes Ingress Controller Ingresses inspected, as through Envoy Gateway and Istio: the
+  operator injects the engine with `--response-messages` and adds the response rules to each
+  Ingress's backend snippet. Restart the controller's pods after the upgrade: until every pod runs
+  an engine injected by 0.6.0, such a policy stays `Programmed=False` (`ResponsesNotInspected`),
+  naming the pods. A pinned `spec.engine.image` must be 0.6.0 or later. With HAProxy configured by
+  hand, `inkwall-engine spoe --inspect-responses` and the new lines of `examples/haproxy/spoe.conf`
+  and `haproxy.cfg`
+  ([responses](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/haproxy.md#responses)).
+- **The standalone proxy inspects responses**: `inkwall-engine proxy --inspect-responses`, with at
+  most `--max-held-response-bytes` (64 MiB) of bodies held at once
+  ([responses](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/standalone-proxy.md#responses)).
+- **Streamed responses, event by event**: `responses: {inspect: true, streams: Inspect}` inspects
+  each Server-Sent Event and each message of a gRPC response on its own, through Envoy Gateway and
+  Istio (`--response-streams inspect` for raw Envoy and the standalone proxy); in `Block` mode a
+  leaking event ends the stream. HAProxy doesn't send a streamed body, so such a policy is
+  `ResponsesNotInspected` on its Ingresses.
+- **gRPC streams, one message at a time**: with `body.grpcMessages: Inspect`,
+  `body.grpcStreams: PerMessage` inspects each message as it arrives, through Envoy Gateway, Istio
+  and raw Envoy, so long client streams and bidirectional calls work in `Block` mode. The messages
+  before a denied one have already reached the application, which is why it is off by default.
+  With streamed responses inspected, a gRPC server's messages and its status message are inspected
+  too ([gRPC](/docs/grpc/)).
+- **Rule sets before the CRS**: `placement: BeforeCRS` on a rule set binding loads it before the
+  CRS's initialization, so its `setvar:tx.…` and `ctl:ruleRemoveById` rules change what the CRS
+  does. It can't use `SecRuleRemoveBy*` or `SecRuleUpdate*` ([Policies](/docs/policies/)).
+- **`inkwallctl explain`** says why a policy isn't `Ready` and why a request was denied, and
+  **`inkwallctl mcp`** serves those answers to an AI assistant, read-only
+  ([Monitoring](/docs/monitoring/)). `explain request` reads the engines' logs: it needs `get` on
+  `pods/log`.
+- **The operator's metrics over HTTPS**: `metrics.secure.enabled=true` serves `/metrics` only to
+  tokens the API server allows to get it. Bind the new `inkwall-operator-metrics-reader`
+  ClusterRole to Prometheus' service account first. Off by default, also with `--reuse-values`
+  ([Monitoring](/docs/monitoring/#metrics-over-https)).
+- **`WAFIPList` in Managed mode**: a control plane can deliver the IP lists its policies name, and
+  sees every `WAFIPList` in the cluster state ([Control plane](/docs/control-plane/)).
+
+### What changes by itself in 0.6.0
+
+- **Traefik adds about 1.3 ms instead of 8 ms.** Traefik's ForwardAuth allocated its
+  `maxBodySize` (10 MiB) for every request, body or not. On Traefik v3.7 and later, the operator's
+  `inkwall-waf` Middleware becomes a `chain` of two new ones in the same namespace:
+  `inkwall-waf-body`, a Buffering Middleware that bounds request bodies (10 MiB + 1, in memory;
+  responses aren't buffered), then `inkwall-waf-auth`, the ForwardAuth, with no body limit of its
+  own. Routes keep referring to `inkwall-waf`, the engine inspects the same requests, and the
+  operator rewrites the Middlewares on its first reconcile, with no restart of Traefik. **A body
+  over 10 MiB + 1 now gets 413 from Traefik instead of 401**, and a chunked request body reaches
+  the application with a `Content-Length`. A Middleware named `inkwall-waf-body` or
+  `inkwall-waf-auth` that the operator didn't create stops the wiring in its namespace
+  (`WiringFailed`): rename it. Before Traefik v3.7 (by its CRD or its image tag), the Middleware
+  stays as it was.
+- **The probe proves responses, and reaches your app.** For a policy with `responses.inspect`, the
+  operator's probe also proves that the route's responses reach the engine, through every Istio
+  gateway pod and every HAProxy controller pod: a `GET` (or `HEAD`) with
+  `User-Agent: inkwall-operator-probe` on the reserved path
+  `.well-known/inkwall-probe/<nonce>?inkwall-probe-leg=response`, per pod and listener every
+  5 minutes, **in `Block` mode too**. Your app can answer 404: the engine replaces its answer.
+  Until the probe has passed, the policy is `Unverified`; where a pod's engine doesn't see the
+  responses, `ResponsesNotInspected`, naming the pod.
+- **`Detect`-mode Istio routes become `Programmed`**: the engine keeps a receipt of each probe it
+  verified, and the operator proves the route by it. Pods with an engine older than 0.6.0 report
+  no receipts, so their routes stay `Unverified` until restarted. In `Detect` mode the probe now
+  reaches your app (a `GET` on `.well-known/inkwall-probe/<nonce>`), and a rule matching only a
+  method other than `GET` or `HEAD` is `NotProbeable` there.
+- **HAProxy: a request or a response too large for one SPOE frame is handled as oversized**: 413
+  for such a request and 502 for such a response, for `Block`-mode policies, as `body.onOversize`
+  and `responses.onOversize` say. By hand, copy the two rules on `txn.inkwall.error` from
+  `examples/haproxy/haproxy.cfg`.
+- **In Managed mode, a `WAFIPList` labelled `inkwall.dev/source: saas` is the control plane's**:
+  the webhook refuses deleting it, and the next snapshot that doesn't carry it deletes it. One you
+  labelled yourself is pruned: find them with
+  `kubectl get wafiplist -A -l inkwall.dev/source=saas` and remove the label first.
+- **`GOMEMLIMIT` from the container's cgroup**: the engine and the operator set it to 90% of the
+  cgroup's memory limit when `MEMORY_LIMIT` isn't set, so a standalone engine in
+  `docker run --memory 256m` gets one too. `MEMORY_LIMIT`, and `GOMEMLIMIT` set by hand, still
+  win.
+- **A pinned older engine starts.** The operator reads the engine's release from
+  `spec.engine.image`'s tag and leaves out the flags it doesn't know, instead of injecting them and
+  leaving the pod crash-looping; an image whose tag isn't a release gets only the flags every
+  release knows. The new `EngineConfigured` condition on the `InkwallConfig`, and a Warning Event,
+  name the settings left out. Pin a custom build with its version in the tag
+  (`:0.6.0@sha256:...`).
+
+### Rolling back to 0.5.x
+
+After a rollback to 0.5.x, the older operator rewrites Traefik's `inkwall-waf` to its single
+ForwardAuth in place, and leaves `inkwall-waf-body` and `inkwall-waf-auth` unused until 0.6.0 takes
+them back. To remove them:
+
+```sh
+kubectl delete middlewares.traefik.io -A -l app.kubernetes.io/managed-by=inkwall-operator \
+  --field-selector metadata.name=inkwall-waf-body
+kubectl delete middlewares.traefik.io -A -l app.kubernetes.io/managed-by=inkwall-operator \
+  --field-selector metadata.name=inkwall-waf-auth
+```
 
 ## From 0.5.1 to 0.5.2
 
@@ -43,7 +168,7 @@ What changes by itself:
 
 With HAProxy configured by hand, add the new rule of the example configuration before the
 fail-closed rule, and leave it out in detect mode
-([the complete haproxy.cfg](https://github.com/inkwall-dev/inkwall/blob/v0.5.2/docs/haproxy.md#the-complete-haproxycfg)):
+([the complete haproxy.cfg](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/haproxy.md#the-complete-haproxycfg)):
 
 ```haproxy
 http-request deny deny_status 413 if { var(txn.inkwall.error) -m int 3 259 }
@@ -587,5 +712,5 @@ Roll back to 0.2.2 rather than 0.2.0 or 0.2.1, which are affected by GHSA-r5cq-6
 Upgrade to 0.2.2 first. On the way, every `WAFPolicy` gets the finalizer `waf.inkwall.dev/unwire`
 (from 0.1.0), which matters if Argo CD or Flux manages them ([GitOps](/docs/gitops/)), and bundles
 past 900 KiB compressed are split into chunk Secrets, which 0.1.x can't read. The full guide's
-[0.1.x section](https://github.com/inkwall-dev/inkwall/blob/v0.5.2/docs/upgrading.md#from-01x-to-022)
+[0.1.x section](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/upgrading.md#from-01x-to-022)
 lists every change and how to roll back.

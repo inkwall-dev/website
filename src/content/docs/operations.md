@@ -85,8 +85,9 @@ the proxy pod it runs in. Among the operator's:
 | `inkwall_operator_wiring_failures{integration}` | Targets that couldn't be wired (`WiringFailed`) |
 | `inkwall_operator_request_stats_dropped_total{reason}` | Policies' request counts dropped on their way to a [control plane](/docs/control-plane/) |
 
-The engines' metrics, the alerts and the Grafana dashboard the chart ships, and what to do when an
-alert fires are on [Monitoring](/docs/monitoring/).
+The engines' metrics, the alerts and the Grafana dashboard the chart ships, serving the operator's
+metrics over HTTPS (since 0.6.0), and what to do when an alert fires are on
+[Monitoring](/docs/monitoring/).
 
 ## Rolling out a new engine
 
@@ -109,6 +110,13 @@ rollout, and the `InkwallConfig`'s `EngineRollout` condition says why:
 kubectl get inkwallconfig default -o jsonpath='{.status.conditions[?(@.type=="EngineRollout")].message}'
 ```
 
+To hold the engine at a version, pin `InkwallConfig.spec.engine.image`. Since 0.6.0, the operator
+reads the engine's release from the image's tag and injects only the flags that release knows, so a
+pinned older engine starts instead of exiting on a flag it doesn't know; an image whose tag isn't a
+release (`latest`, a digest alone) gets only the flags every release knows. The `EngineConfigured`
+condition, and a Warning Event, name the settings left out. Pin a custom build with its version in
+the tag (`:0.6.0@sha256:...`) to keep every setting.
+
 ## Proxy namespaces
 
 The operator recognises a proxy's pods by their labels: Traefik's `app.kubernetes.io/name=traefik`,
@@ -126,7 +134,7 @@ else is an ordinary pod. List only namespaces where only the people who run the 
 If your proxy runs in another namespace, list it, with the defaults you still need:
 
 ```sh
-helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.5.2 \
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.6.0 \
   --namespace inkwall-system --reset-then-reuse-values \
   --set 'injection.proxyNamespaces={ingress,envoy-gateway-system}'
 ```
@@ -188,7 +196,7 @@ the metrics (`networkPolicy.metricsFrom`). `networkPolicy.egress.enabled: true` 
 the chart's pods connect to. Engines run in the proxies' namespaces, which the chart doesn't own: if
 those deny by default, let the engines reach the operator's port 9445 and the API server. The chart
 README has the
-[network flows](https://github.com/inkwall-dev/inkwall/blob/v0.5.2/deploy/helm/inkwall/README.md#network-flows).
+[network flows](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/deploy/helm/inkwall/README.md#network-flows).
 
 ## Chart values
 
@@ -197,7 +205,7 @@ Since 0.5.0, the chart checks its values against a schema: `helm install`, `upgr
 0.4.x ignored it. Run `helm upgrade ... --dry-run` first. It also takes private registries
 (`global.imageRegistry`, `global.imagePullSecrets`), image digests, extra env and volumes, and
 topology spread
-([private registries](https://github.com/inkwall-dev/inkwall/blob/v0.5.2/deploy/helm/inkwall/README.md#private-registries)).
+([private registries](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/deploy/helm/inkwall/README.md#private-registries)).
 The chart works with Helm 3 and Helm 4.
 
 ## Proxies with other labels
@@ -226,7 +234,7 @@ operator unwires the routes (`SidecarMissing`) until one matches again.
 ## Turning injection off
 
 ```sh
-helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.5.2 \
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.6.0 \
   --namespace inkwall-system --reset-then-reuse-values --set injection.enabled=false
 ```
 
@@ -306,4 +314,4 @@ The CRDs, your `WAFPolicy` objects and the operator's Secrets (the bundle, its c
 key) are kept, so a reinstall continues with the same keys. To remove the Secrets, delete the
 namespace.
 
-More in the [chart README](https://github.com/inkwall-dev/inkwall/tree/v0.5.2/deploy/helm/inkwall).
+More in the [chart README](https://github.com/inkwall-dev/inkwall/tree/v0.6.0/deploy/helm/inkwall).
