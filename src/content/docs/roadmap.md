@@ -185,16 +185,16 @@ A security release for 0.5 ([release post](/blog/inkwall-v0-5-2/)):
   large for one SPOE frame passed uninspected when a `Block`-mode policy failed open. It is now
   handled as oversized, as `body.onOversize` says (413 in `Block` mode).
 
-## v0.5.3 and v0.4.2: security fixes
+## v0.5.3, v0.4.2 and v0.3.4: security fixes
 
-Patch releases for the 0.5 and 0.4 lines ([release post](/blog/inkwall-v0-5-3-and-v0-4-2/)):
+Patch releases for the 0.5, 0.4 and 0.3 lines ([release post](/blog/inkwall-v0-5-3-and-v0-4-2/)):
 
 - [GHSA-m382-qw6g-4qmj](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-m382-qw6g-4qmj)
   (low, 0.5.3), updated: through Traefik (ForwardAuth), 0.5.0 to 0.5.2 still quoted an invalid
   `X-Forwarded-Host` in the engine's error log. It is now logged by name, not value, as every
   other parse error is. 0.4.x isn't patched for it.
-- 0.4.2 is built with Go 1.27.4, for [GO-2026-6859](https://pkg.go.dev/vuln/GO-2026-6859) in
-  `net/http`, as 0.5.1 is.
+- 0.4.2 and 0.3.4 are built with Go 1.27.4, for
+  [GO-2026-6859](https://pkg.go.dev/vuln/GO-2026-6859) in `net/http`, as 0.5.1 is.
 
 ## v0.6.0: assistants, next
 
