@@ -233,8 +233,7 @@ support.
 ## What's next
 
 v1.0.0 takes the API out of `v1alpha1`, with an upgrade path and a compatibility promise. After it:
-WebSocket messages through Envoy, gRPC messages read with their schema, Caddy, and protecting LLM
-APIs. See the [roadmap](/docs/roadmap/).
+WebSocket messages through Envoy, gRPC messages read with their schema, and protecting LLM APIs. See the [roadmap](/docs/roadmap/).
 
 Inkwall is on [GitHub](https://github.com/inkwall-dev/inkwall). Try it on your own traffic, run
 `make fp-run` with your own HAR, and tell us what it got wrong.

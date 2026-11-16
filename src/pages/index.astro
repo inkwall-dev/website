@@ -58,7 +58,6 @@ const integrations: { name: string; hook: string; state: State; note: string }[]
   { name: 'Raw Envoy, HAProxy', hook: 'ext_proc, SPOE', state: 'works', note: 'Since v0.4.0: an Envoy or HAProxy you configure yourself calls the engine' },
   { name: 'Any proxy with a hook', hook: 'POST /v1/check', state: 'works', note: 'The engine’s own API, protobuf or JSON' },
   { name: 'Kubernetes operator', hook: 'CRDs', state: 'works', note: 'Validation, signed bundles with key rotation, injection, wiring, proxy discovery and status; a role per integration; an opt-in automatic engine rollout; per-policy request counts; scale-tested with 5,000 policies and 500 fake engines at a median peak of 409 MiB; Helm chart on GHCR' },
-  { name: 'Caddy', hook: 'Module', state: 'planned', note: '' },
 ];
 const label: Record<State, string> = { works: 'Works today', progress: 'Next', planned: 'Planned' };
 ---

@@ -231,7 +231,6 @@ The CRDs out of `v1alpha1`, with an upgrade path and a compatibility promise.
   ([#316](https://github.com/inkwall-dev/inkwall/issues/316)).
 - Protecting LLM APIs against the OWASP Top 10 for LLM applications
   ([#277](https://github.com/inkwall-dev/inkwall/issues/277)).
-- Caddy (a module).
 
 ingress-nginx is not planned: it is retired upstream. For its users, Inkwall's answer is
 migration: `inkwallctl migrate ingress-nginx` turns its ModSecurity annotations into policies, see

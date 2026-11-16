@@ -234,6 +234,6 @@ by event with `--response-streams inspect`.
 ![The engine inspects the request, forwards allowed requests to the app, and answers denied or failed ones itself.](/diagrams/reverse-proxy.svg)
 
 What each proxy inspects (bodies, responses, gRPC messages, WebSocket handshakes and messages) is
-on [Proxies](/docs/proxies/). Caddy (a module) and protecting LLM APIs come later; see the
+on [Proxies](/docs/proxies/). Protecting LLM APIs comes later; see the
 [roadmap](/docs/roadmap/). ingress-nginx is retired upstream and not planned: see
 [Migrating from ingress-nginx](/docs/migrating-from-ingress-nginx/).
