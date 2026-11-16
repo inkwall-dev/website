@@ -1,6 +1,6 @@
 ---
 title: Upgrading
-description: Upgrade from 0.5.2 to 0.5.3, from 0.5.1 to 0.5.2, from 0.5.0 to 0.5.1, from 0.4.x to 0.5.0, from 0.4.1 to 0.4.2, from 0.4.0 to 0.4.1, from 0.3.2 to 0.3.3, from 0.2.2 to 0.2.3, from 0.3.x to 0.4.0, from 0.3.1 to 0.3.2, from 0.3.0 to 0.3.1, and from 0.2.x to 0.3.0, what to check first, what changes by itself, protecting HTTPRoutes, and how to roll back.
+description: Upgrade from 0.5.2 to 0.5.3, from 0.5.1 to 0.5.2, from 0.5.0 to 0.5.1, from 0.4.x to 0.5.0, from 0.4.1 to 0.4.2, from 0.4.0 to 0.4.1, from 0.3.3 to 0.3.4, from 0.3.2 to 0.3.3, from 0.2.2 to 0.2.3, from 0.3.x to 0.4.0, from 0.3.1 to 0.3.2, from 0.3.0 to 0.3.1, and from 0.2.x to 0.3.0, what to check first, what changes by itself, protecting HTTPRoutes, and how to roll back.
 order: 2
 ---
 
@@ -13,7 +13,8 @@ in 0.4.1 and 0.4.2 is in [From 0.4.0 to 0.4.1](#from-040-to-041) and
 [From 0.4.1 to 0.4.2](#from-041-to-042).
 From any 0.3 release, upgrade to 0.4.2 first, with `--version 0.4.2` in the commands of
 [From 0.3.x to 0.4.0](#from-03x-to-040), and read the sections after it; to stay on 0.3, upgrade to
-0.3.3 as in [From 0.3.2 to 0.3.3](#from-032-to-033).
+0.3.4 as in [From 0.3.3 to 0.3.4](#from-033-to-034), and from 0.3.2 or earlier read
+[From 0.3.2 to 0.3.3](#from-032-to-033) too. 0.3 leaves support when 0.6.0 is released.
 From any 0.2 release, upgrade to 0.3.0 first, as in
 [From 0.2.x to 0.3.0](#from-02x-to-030); to stay on 0.2, upgrade to 0.2.3, a security patch
 release, as in [From 0.2.2 to 0.2.3](#from-022-to-023). From 0.1.x, upgrade to 0.2.3 first, then
@@ -268,6 +269,22 @@ What changes by itself:
 - **The engine sets a Go memory limit.** It sets `GOMEMLIMIT` to 90% of its container's memory
   limit, as the operator does, unless `GOMEMLIMIT` is set. A request body over the inspected limit
   keeps only the inspected part in the engine's memory.
+
+## From 0.3.3 to 0.3.4
+
+0.3.4 is a patch release with no API or chart change: upgrade the chart as for 0.3.3, with
+`--version 0.3.4`, then restart Traefik and the Envoy Gateway proxies so their engines are 0.3.4.
+What changes by itself:
+
+- **Built with Go 1.27.4**, for
+  [GO-2026-6859](https://pkg.go.dev/vuln/GO-2026-6859), as 0.4.2 and 0.5.1 are: an HTTP/1 server
+  using `net/http`'s `MaxBytesReader` could panic when its limit was exceeded while the handler
+  wrote headers.
+
+0.3 leaves support when 0.6.0 is released (the newest three minor versions are supported): plan
+the upgrade to 0.5.3, or to 0.6.0 when it's out. 0.3.x is not patched for the advisories fixed in
+later minor versions, such as
+[GHSA-m382-qw6g-4qmj](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-m382-qw6g-4qmj).
 
 ## From 0.3.2 to 0.3.3
 
