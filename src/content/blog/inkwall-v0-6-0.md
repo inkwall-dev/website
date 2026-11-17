@@ -1,7 +1,7 @@
 ---
 title: Inkwall v0.6.0, one WAF for six proxies, measured
 description: Inkwall is a Kubernetes-native web application firewall, OWASP Coraza and the Core Rule Set behind Traefik, Envoy Gateway, Istio, HAProxy, raw Envoy or its own reverse proxy. v0.6.0 inspects responses through HAProxy and the reverse proxy, streams event by event, explains its denials, and comes with the latency, false positives and soak results we measured.
-date: 2026-11-15 # set to the tag's date when v0.6.0 is released
+date: 2026-11-17
 author: The Inkwall team
 ---
 
@@ -40,7 +40,7 @@ spec:
 ```console
 $ kubectl get wafpolicy -n shop
 NAME   MODE    READY   REASON   BUNDLE   AGE
-web    Block   True    Ready    2        3s
+web    Detect  True    Ready    2        3s
 ```
 
 ## Which proxies
@@ -100,7 +100,7 @@ i7-1255U laptop, 12 CPUs, 15 GiB. Added p50 / p99:
 | `inkwall-engine proxy` | +0.96 / +2.91 ms | +1.15 / +4.32 ms | +1.79 / +3.98 ms | +15.39 / +20.76 ms |
 
 Inspecting requests adds about 1 to 2 ms at p50 and 3 to 4 ms at p99, whatever the proxy, and each
-engine peaked at 102 to 107 MiB of memory. The first run of this test found Traefik at +8.4 ms: its
+engine peaked at 103 to 107 MiB of memory. The first run of this test found Traefik at +8.4 ms: its
 ForwardAuth allocated its 10 MiB body limit for every request. That is fixed in this release (on
 Traefik v3.7 or later), and the table is the run after the fix.
 
@@ -137,12 +137,26 @@ exclusions, and `inkwallctl explain` says why any one request was denied.
 ### Soak with chaos
 
 `make kind-soak`: the six proxies on one kind cluster, each with steady clean and attack traffic,
-for 5 hours, while every 15 minutes one thing breaks in turn: the operator's leader is killed, an
-engine is killed, a proxy's pod is deleted, the API server is stopped, the bundle distribution is
+for an hour on the release's fixes (before its last two performance changes), while every 10 minutes one thing breaks in turn: the operator's
+leader is killed, an engine is killed, a proxy's pod is deleted, the API server is stopped, the bundle distribution is
 cut. Each must recover within 5 minutes, and throughout, no attack may reach the app and no policy
 may claim protection a canary request shows isn't there.
 
-<!-- SOAK: fill after the 5 h soak ends -->
+| Proxy | Clean requests | Attacks denied | Attacks through | p50 / worst p99 |
+|---|---|---|---|---|
+| Traefik | 14,399 | 3,599 | 0 | 2.2 / 112 ms |
+| Envoy Gateway | 14,398 | 3,599 | 0 | 2.4 / 36 ms |
+| Istio | 14,399 | 3,599 | 0 | 2.8 / 34 ms |
+| HAProxy | 14,378 | 3,594 | 0 | 1.8 / 32 ms |
+| raw Envoy | 14,399 | 3,599 | 0 | 2.2 / 41 ms |
+| standalone proxy | 14,399 | 3,599 | 0 | 1.7 / 41 ms |
+
+No attack reached the app and no clean request was denied. Each failure was recovered from in
+3 to 30 seconds, and the engines stayed at 62 to 68 MiB, none growing more than 3 MiB. One status
+claim came early: a policy edit made seconds after the API server came back was reported `Enforced`
+through raw Envoy about 10 seconds before its engine ran it. Attacks were still denied; only the
+edit's new rule wasn't applied yet. It didn't recur in a targeted run, and
+[we're fixing it](https://github.com/inkwall-dev/inkwall/issues/675).
 
 ### And on every change
 
@@ -170,8 +184,9 @@ kubectl -n shop wait wafpolicy/web --for=condition=Ready --timeout=3m
 
 Send it a SQL injection, see it logged in `Detect` mode, switch the policy to `Block` and see it
 denied; the quickstart has each step. [`examples/`](https://github.com/inkwall-dev/inkwall/tree/v0.6.0/examples)
-has the same app behind Envoy Gateway, Istio and HAProxy, and [Getting started](/docs/getting-started/)
-covers a real cluster and the engine on its own, without Kubernetes:
+has the same app behind Envoy Gateway and Istio, with configurations for an Envoy or HAProxy you
+run yourself; [Getting started](/docs/getting-started/) covers a real cluster and the engine on its
+own, without Kubernetes:
 
 ```sh
 inkwall-engine proxy --upstream http://localhost:3000 --mode block
@@ -229,6 +244,25 @@ What needs a look:
 
 The [upgrade guide](/docs/upgrading/) has the rest. 0.6, 0.5 and 0.4 get fixes; 0.3 is out of
 support.
+
+## Security
+
+0.6.0 fixes six vulnerabilities, also fixed in [0.5.4 and 0.4.3](/blog/inkwall-v0-5-4-and-v0-4-3/),
+released the same day:
+
+| Advisory | Severity | What | Affected |
+|---|---|---|---|
+| [GHSA-c52q-5h8m-279w](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-c52q-5h8m-279w) | High | A request can be inspected by a weaker policy than the route it reaches | 0.3.0 to 0.5.3, in bundle mode |
+| [GHSA-r2m3-77h9-hq8v](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-r2m3-77h9-hq8v) | High | A namespace's WAFPolicy can weaken or freeze another namespace's protection on a shared proxy fleet | 0.3.0 to 0.5.3 |
+| [GHSA-9rmr-w4mp-34f3](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-9rmr-w4mp-34f3) | High | The standalone proxy forwards non-WebSocket upgrades such as `h2c` | Every release up to 0.5.3, the standalone proxy only |
+| [GHSA-6vg9-25gh-3327](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-6vg9-25gh-3327) | Medium | Response inspection skips bodies by media type, `Range` and `Content-Encoding` list | 0.4.0 to 0.5.3 |
+| [GHSA-m6qq-cj2f-9h75](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-m6qq-cj2f-9h75) | Medium | gRPC message fields with control characters are not inspected, and some event snippets are not redacted | 0.4.0 to 0.5.3 (the snippets: 0.5 only) |
+| [GHSA-pjxq-6323-wcr3](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-pjxq-6323-wcr3) | Medium | `inkwallctl migrate ingress-nginx` can produce a broader exclusion than the source rules | `inkwallctl` 0.3.0 to 0.5.3 |
+
+The fixes change a few things by themselves: a policy on an HTTPRoute no Gateway accepts, or
+overlapping another namespace's route, is now `Accepted=False`; HAProxy configured by hand needs two
+new rules; the [upgrade guide](/docs/upgrading/#what-changes-by-itself-in-060) lists them. 0.3.x is
+not patched: on 0.3, upgrade to 0.4.3 first, then onward.
 
 ## What's next
 

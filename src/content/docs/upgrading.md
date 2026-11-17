@@ -1,17 +1,19 @@
 ---
 title: Upgrading
-description: Upgrade from 0.5.x to 0.6.0, from 0.5.1 to 0.5.2, from 0.5.0 to 0.5.1, from 0.4.x to 0.5.0, from 0.4.0 to 0.4.1, from 0.3.2 to 0.3.3, from 0.2.2 to 0.2.3, from 0.3.x to 0.4.0, from 0.3.1 to 0.3.2, from 0.3.0 to 0.3.1, and from 0.2.x to 0.3.0, what to check first, what changes by itself, protecting HTTPRoutes, and how to roll back.
+description: Upgrade from 0.5.x to 0.6.0, from 0.5.3 to 0.5.4, from 0.5.1 to 0.5.2, from 0.5.0 to 0.5.1, from 0.4.x to 0.5.0, from 0.4.2 to 0.4.3, from 0.4.1 to 0.4.2, from 0.4.0 to 0.4.1, from 0.3.3 to 0.3.4, from 0.3.2 to 0.3.3, from 0.2.2 to 0.2.3, from 0.3.x to 0.4.0, from 0.3.1 to 0.3.2, from 0.3.0 to 0.3.1, and from 0.2.x to 0.3.0, what to check first, what changes by itself, protecting HTTPRoutes, and how to roll back.
 order: 2
 ---
 
-The latest release is **0.6.0**. From any 0.5 release, upgrade straight to 0.6.0 as
-[below](#from-05x-to-060). From any 0.4 release, upgrade to 0.5.2 first, with `--version 0.5.2` in
-the commands of [From 0.4.x to 0.5.0](#from-04x-to-050), and read the 0.5 sections; what changed
-in 0.4.1 is in [From 0.4.0 to 0.4.1](#from-040-to-041). 0.6, 0.5 and 0.4 get fixes; 0.3 is out of
-support.
-From any 0.3 release, upgrade to 0.4.1 first, with `--version 0.4.1` in the commands of
-[From 0.3.x to 0.4.0](#from-03x-to-040), and read both sections; to stay on 0.3, upgrade to 0.3.3
-as in [From 0.3.2 to 0.3.3](#from-032-to-033).
+The latest release is **0.6.0**, and the latest patch releases of the older lines are **0.5.4**
+and **0.4.3**, with the same security fixes. From any 0.5 release, upgrade straight to 0.6.0 as
+[below](#from-05x-to-060), or to 0.5.4 to stay on 0.5, as in
+[From 0.5.3 to 0.5.4](#from-053-to-054). From any 0.4 release, upgrade to 0.5.4 first, with
+`--version 0.5.4` in the commands of [From 0.4.x to 0.5.0](#from-04x-to-050), and read the 0.5
+sections; to stay on 0.4, upgrade to 0.4.3, as in [From 0.4.2 to 0.4.3](#from-042-to-043).
+0.6, 0.5 and 0.4 get fixes. 0.3 left support with 0.6.0 and is not patched for the advisories
+fixed in 0.6.0, 0.5.4 and 0.4.3: from any 0.3 release, upgrade to 0.4.3 first, with
+`--version 0.4.3` in the commands of [From 0.3.x to 0.4.0](#from-03x-to-040), read both sections,
+then upgrade onward.
 From any 0.2 release, upgrade to 0.3.0 first, as in
 [From 0.2.x to 0.3.0](#from-02x-to-030); to stay on 0.2, upgrade to 0.2.3, a security patch
 release, as in [From 0.2.2 to 0.2.3](#from-022-to-023). From 0.1.x, upgrade to 0.2.3 first, then
@@ -99,6 +101,10 @@ set them.
   `inkwall-waf-auth` that the operator didn't create stops the wiring in its namespace
   (`WiringFailed`): rename it. Before Traefik v3.7 (by its CRD or its image tag), the Middleware
   stays as it was.
+- **`Enforced` waits for every serving pod's engine.** A running proxy pod that serves a policy
+  but whose engine isn't connected to the operator (starting or reconnecting) now makes the policy
+  `Enforced=False` (`EnginesBehind`) until its engine connects and runs the bundle. Expect a few
+  seconds of `EnginesBehind` after a proxy pod starts.
 - **The probe proves responses, and reaches your app.** For a policy with `responses.inspect`, the
   operator's probe also proves that the route's responses reach the engine, through every Istio
   gateway pod and every HAProxy controller pod: a `GET` (or `HEAD`) with
@@ -131,6 +137,65 @@ set them.
   name the settings left out. Pin a custom build with its version in the tag
   (`:0.6.0@sha256:...`).
 
+The security fixes of 0.6.0, also in 0.5.4 and 0.4.3, change these:
+
+- **A request whose path a proxy may route differently is inspected by every policy it could
+  select.** A path with dot segments (`/a/../b`), encoded characters (`%2F`, `%2e`) or repeated
+  slashes can match one route as received and another once decoded; when those forms select
+  different policies, each inspects the request and the strictest verdict wins. Plain paths don't
+  change
+  ([GHSA-c52q-5h8m-279w](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-c52q-5h8m-279w)).
+- **Policies of different namespaces on a shared proxy fleet**
+  ([GHSA-r2m3-77h9-hq8v](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-r2m3-77h9-hq8v)):
+  - A policy applies to an HTTPRoute only once a Gateway accepts it (a parent in
+    `status.parents` with `Accepted=True`); until then it is `Accepted=False`
+    (`TargetNotAttached`). Envoy Gateway and Istio Gateways are wired only for the routes they
+    accept; until then the policy is `Programmed=False` (`Pending`).
+  - Where the engine can't tell which of two namespaces' overlapping routes the proxy used, the
+    overlap goes to the stricter policy, or else the older one, no longer the more specific
+    target; both policies say so (`RouteOverlap`).
+  - A policy whose rule sets don't compile together is left out (`Accepted=False`,
+    `RuleSetsIncompatible`), or keeps its previous version, instead of breaking the bundle for
+    every engine.
+  - Each engine is recorded under the pod its token is bound to, so engines that report the same
+    ID no longer share one record in `inkwallctl status` or `Enforced`.
+
+  After the upgrade, run `kubectl get wafpolicy -A` and look for policies that are now
+  `Accepted=False`.
+- **The standalone proxy and HAProxy forward only WebSocket upgrades.** Any other `Upgrade`
+  (`h2c`, `websocket, h2c`, `TLS/1.2`, ...) is removed with `HTTP2-Settings`, and the request
+  reaches the upstream as plain HTTP/1.1; a client that offers `h2c` gets HTTP/1.1
+  ([GHSA-9rmr-w4mp-34f3](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-9rmr-w4mp-34f3)).
+  The operator rewrites the HAProxy Ingresses' snippets on its first reconcile. With HAProxy
+  configured by hand, add the two rules after the engine's verdict
+  ([WebSocket](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/haproxy.md#websocket)):
+
+  ```haproxy
+  http-request del-header upgrade unless { req.fhdr_cnt(upgrade) eq 1 } { req.fhdr(upgrade) -m str -i websocket }
+  http-request del-header http2-settings
+  ```
+- **Response bodies are read in more media types, and whole.** With `responses.inspect`, bodies
+  of `text/csv`, JavaScript, `application/xhtml+xml`, any `+json` or `+xml` type, a malformed
+  media type, or no type at all are inspected too. On those routes the engine removes the
+  request's `Range` and `If-Range`, so clients get `200` with the whole body instead of `206`; a
+  partial body the app sends anyway, or one with several `Content-Encoding` values, counts as
+  uninspected and gets `responses.onOversize`
+  ([GHSA-6vg9-25gh-3327](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-6vg9-25gh-3327)).
+  With HAProxy configured by hand and responses inspected, copy the new `del-header range`,
+  `del-header if-range` and `wait-for-body` lines of `examples/haproxy/haproxy.cfg`, and
+  `whole=var(txn.inkwall.response_whole)` in `spoe.conf`'s `inkwall-response` message.
+- **gRPC messages: every text field is read** (`body.grpcMessages: Inspect`). A field with a
+  control or invisible character is now inspected, the character read as a space, and a binary
+  field gives its runs of readable characters. If a policy's events show a new false positive,
+  exclude that field (`when: {argument: "3"}`). A match on XML text, a gRPC field or a WebSocket
+  message leaves no snippet in security events
+  ([GHSA-m6qq-cj2f-9h75](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-m6qq-cj2f-9h75)).
+- **`inkwallctl migrate ingress-nginx` leaves chained `ctl` rules out** as `TODO`, instead of
+  turning them into exclusions or `skip.paths` entries for every request: run the migration again
+  and convert those chains by hand. With `-f`, an object whose name isn't a valid Kubernetes name
+  is refused, and `--output` writes only inside its directory
+  ([GHSA-pjxq-6323-wcr3](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-pjxq-6323-wcr3)).
+
 ### Rolling back to 0.5.x
 
 After a rollback to 0.5.x, the older operator rewrites Traefik's `inkwall-waf` to its single
@@ -143,6 +208,46 @@ kubectl delete middlewares.traefik.io -A -l app.kubernetes.io/managed-by=inkwall
 kubectl delete middlewares.traefik.io -A -l app.kubernetes.io/managed-by=inkwall-operator \
   --field-selector metadata.name=inkwall-waf-auth
 ```
+
+## From 0.5.3 to 0.5.4
+
+0.5.4 is a patch release with security fixes and no API change: upgrade the chart as for 0.5.3,
+then restart the proxies whose pods run the engine (Traefik, Istio's ingress gateways and HAProxy;
+Istio rolls its Gateway API gateways and Envoy Gateway re-creates its own) so their engines are
+0.5.4, or let `spec.engine.rollout: Automatic` do it. Run the 0.5.4 image or binary of the
+standalone proxy and `inkwallctl`:
+
+```sh
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.5.4 \
+  --namespace inkwall-system --reset-then-reuse-values
+kubectl -n inkwall-system rollout status deployment/inkwall-operator
+kubectl -n <traefik namespace> rollout restart deployment/<traefik>
+kubectl get wafpolicy -A
+```
+
+What changes by itself is the security part of
+[What changes by itself in 0.6.0](#what-changes-by-itself-in-060), without the lines for HAProxy's
+responses, which 0.5 doesn't inspect through HAProxy: the six advisories,
+[GHSA-c52q-5h8m-279w](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-c52q-5h8m-279w),
+[GHSA-r2m3-77h9-hq8v](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-r2m3-77h9-hq8v),
+[GHSA-9rmr-w4mp-34f3](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-9rmr-w4mp-34f3),
+[GHSA-6vg9-25gh-3327](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-6vg9-25gh-3327),
+[GHSA-m6qq-cj2f-9h75](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-m6qq-cj2f-9h75)
+and [GHSA-pjxq-6323-wcr3](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-pjxq-6323-wcr3).
+In short:
+
+- A policy on an HTTPRoute that no Gateway accepts, or overlapping another namespace's route, is
+  now `Accepted=False` (`TargetNotAttached`, `RouteOverlap`): check `kubectl get wafpolicy -A`
+  after the upgrade.
+- The standalone proxy and the operator's HAProxy snippets forward only WebSocket upgrades. With
+  HAProxy configured by hand, add the two rules of
+  [What changes by itself in 0.6.0](#what-changes-by-itself-in-060) after the engine's verdict.
+- With `responses.inspect`, more media types are read, `Range` and `If-Range` are removed, and a
+  partial body counts as uninspected.
+- gRPC message fields with control characters are inspected, and matches on XML text, gRPC fields
+  and WebSocket messages leave no snippet in security events.
+- `inkwallctl migrate ingress-nginx` leaves chained `ctl` rules out as `TODO`: run it again and
+  convert them by hand.
 
 ## From 0.5.1 to 0.5.2
 
@@ -316,6 +421,26 @@ Nothing below changes a policy you have: the new fields and settings are off unl
 - **Helm 4**: the chart keeps the operator's Pod webhook settings on upgrade. With Helm 4, roll
   back to 0.4.x with `helm rollback --force-conflicts`.
 
+## From 0.4.2 to 0.4.3
+
+0.4.3 is a patch release with the same security fixes as 0.5.4 and no API change: upgrade the
+chart as for 0.4.2, then restart the pods that run the engine (Traefik, Istio's Gateways, HAProxy
+and the Envoy Gateway proxies) so their engines are 0.4.3; 0.4 has no automatic rollout. Run the
+0.4.3 image or binary of the standalone proxy and `inkwallctl`:
+
+```sh
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.4.3 \
+  --namespace inkwall-system --reset-then-reuse-values
+kubectl -n inkwall-system rollout status deployment/inkwall-operator
+kubectl -n <traefik namespace> rollout restart deployment/<traefik>
+kubectl get wafpolicy -A
+```
+
+What changes by itself is as in [From 0.5.3 to 0.5.4](#from-053-to-054), without the part on
+event snippets, which doesn't apply to 0.4. Check `kubectl get wafpolicy -A` for policies that are
+now `Accepted=False`, add the two HAProxy rules to a configuration written by hand, and run
+`inkwallctl migrate ingress-nginx` again. 0.4 is supported until 0.7.0.
+
 ## From 0.4.1 to 0.4.2
 
 0.4.2 is a patch release with no API or chart change: upgrade the chart as for 0.4.1, then restart
@@ -338,7 +463,8 @@ What changes by itself:
 
 0.4.x is not patched for
 [GHSA-m382-qw6g-4qmj](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-m382-qw6g-4qmj)
-(request values in the engine's parse-error log lines): upgrade to 0.5.3, or apply its workaround.
+(request values in the engine's parse-error log lines): upgrade to 0.5.3 or later, or apply its
+workaround.
 
 ## From 0.4.0 to 0.4.1
 
@@ -382,10 +508,10 @@ What changes by itself:
   using `net/http`'s `MaxBytesReader` could panic when its limit was exceeded while the handler
   wrote headers.
 
-0.3 leaves support when 0.6.0 is released (the newest three minor versions are supported): plan
-the upgrade to 0.5.3, or to 0.6.0 when it's out. 0.3.x is not patched for the advisories fixed in
-later minor versions, such as
-[GHSA-m382-qw6g-4qmj](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-m382-qw6g-4qmj).
+0.3.4 is the last 0.3 release: 0.3 left support with 0.6.0 (the newest three minor versions are
+supported). 0.3.x is not patched for the advisories fixed in later releases, such as
+[GHSA-m382-qw6g-4qmj](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-m382-qw6g-4qmj)
+and the six fixed in 0.6.0, 0.5.4 and 0.4.3: upgrade to 0.4.3 or later.
 
 ## From 0.3.2 to 0.3.3
 

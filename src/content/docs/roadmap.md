@@ -185,6 +185,31 @@ A security release for 0.5 ([release post](/blog/inkwall-v0-5-2/)):
   large for one SPOE frame passed uninspected when a `Block`-mode policy failed open. It is now
   handled as oversized, as `body.onOversize` says (413 in `Block` mode).
 
+## v0.5.4 and v0.4.3: security fixes
+
+Security releases for the 0.5 and 0.4 lines, with the same fixes as v0.6.0
+([release post](/blog/inkwall-v0-5-4-and-v0-4-3/)). 0.3 left support with v0.6.0 and isn't
+patched:
+
+- [GHSA-c52q-5h8m-279w](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-c52q-5h8m-279w)
+  (high): in bundle mode, a path with dot segments, encoded characters or repeated slashes could
+  select a weaker policy than the route it reached. Every path form is now inspected with its
+  policy, and the strictest verdict wins.
+- [GHSA-r2m3-77h9-hq8v](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-r2m3-77h9-hq8v)
+  (high): on a shared proxy fleet, a namespace's `WAFPolicy` could weaken or freeze another
+  namespace's protection.
+- [GHSA-9rmr-w4mp-34f3](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-9rmr-w4mp-34f3)
+  (high): the standalone proxy forwarded non-WebSocket upgrades such as `h2c`. It and HAProxy now
+  forward only WebSocket upgrades.
+- [GHSA-6vg9-25gh-3327](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-6vg9-25gh-3327)
+  (medium): response inspection skipped bodies by media type, `Range` and `Content-Encoding` list.
+- [GHSA-m6qq-cj2f-9h75](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-m6qq-cj2f-9h75)
+  (medium): gRPC message fields with control characters weren't inspected, and, in 0.5, some
+  event snippets weren't redacted.
+- [GHSA-pjxq-6323-wcr3](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-pjxq-6323-wcr3)
+  (medium): `inkwallctl migrate ingress-nginx` could produce a broader exclusion than the source
+  rules.
+
 ## v0.6.0: responses everywhere they can go, assistants, and the battle test
 
 The [milestone](https://github.com/inkwall-dev/inkwall/milestone/18), the release Inkwall is

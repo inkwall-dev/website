@@ -122,7 +122,7 @@ a 12th Gen Intel Core i7-1255U, 12 CPUs, 15 GiB. Added p50 / p99:
 | `inkwall-engine proxy` | +0.96 / +2.91 ms | +1.15 / +4.32 ms | +1.79 / +3.98 ms | +15.39 / +20.76 ms |
 
 Inspecting requests adds about 1 to 2 ms at p50 and 3 to 4 ms at p99, whatever the proxy; each
-engine peaked at 102 to 107 MiB. Inspecting a response reads its body before the client gets any of
+engine peaked at 103 to 107 MiB. Inspecting a response reads its body before the client gets any of
 it, about 1 ms per KiB of HTML at this load: turn it on for the routes that can leak, and raise the
 policy's `timeout` with `responses.maxBytes`.
 
@@ -146,9 +146,23 @@ text: start in `Detect` mode, and tune with `inkwallctl tune`.
 
 **Soak with chaos** (`make kind-soak`): every proxy on one cluster with steady clean and attack
 traffic, while the operator, an engine, a proxy pod, the API server and the bundle distribution
-are taken down in turn.
+are taken down in turn. One hour, 5 requests per second per proxy (one in five an attack), one
+failure every 10 minutes:
 
-<!-- SOAK: fill after the 5 h soak ends -->
+| Proxy | Clean requests | Attacks denied | Attacks through | p50 / worst p99 |
+|---|---|---|---|---|
+| Traefik | 14,399 | 3,599 | 0 | 2.2 / 112 ms |
+| Envoy Gateway | 14,398 | 3,599 | 0 | 2.4 / 36 ms |
+| Istio | 14,399 | 3,599 | 0 | 2.8 / 34 ms |
+| HAProxy | 14,378 | 3,594 | 0 | 1.8 / 32 ms |
+| raw Envoy | 14,399 | 3,599 | 0 | 2.2 / 41 ms |
+| standalone proxy | 14,399 | 3,599 | 0 | 1.7 / 41 ms |
+
+No attack reached the app and no clean request was denied. Each failure was recovered from in
+3 to 30 seconds, and the engines stayed at 62 to 68 MiB, none growing more than 3 MiB. One status
+claim came early: a policy edit made seconds after the API server came back was reported
+`Enforced` through raw Envoy about 10 seconds before its engine ran it; attacks were still denied
+([#675](https://github.com/inkwall-dev/inkwall/issues/675)).
 
 ## When inspection fails
 

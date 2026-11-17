@@ -80,8 +80,9 @@ spec:
     grpcStreams: PerMessage # default: Buffer
 ```
 
-(The engine's flag, without the operator: `--grpc-streams per-message`, with Envoy's filter set to
-`allow_mode_override: true`; the operator sets it on the routes of such policies.)
+(The engine's flags, without the operator: `inkwall-engine ext-proc --grpc-messages inspect
+--grpc-streams per-message`, with Envoy's filter set to `allow_mode_override: true`; the operator
+sets it on the routes of such policies.)
 
 - **The call is decided on its path and metadata**, and reaches the application at once; each
   message is then inspected as it completes, with the policy's rules and exclusions, up to
