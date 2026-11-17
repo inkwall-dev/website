@@ -6,9 +6,9 @@ order: 10
 
 A cluster can connect to an optional control plane, a separate service that sees many clusters in
 one place. This repository holds only the cluster side: the operator's client and the protocol,
-[`api/controlplane/v1`](https://github.com/inkwall-dev/inkwall/blob/v0.5.3/api/controlplane/v1/controlplane.proto).
+[`api/controlplane/v1`](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/api/controlplane/v1/controlplane.proto).
 The full guide is
-[`docs/control-plane.md`](https://github.com/inkwall-dev/inkwall/blob/v0.5.3/docs/control-plane.md).
+[`docs/control-plane.md`](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/control-plane.md).
 
 - **Enforcement never depends on it.** Engines enforce the bundle the operator signs with the
   cluster's own key. If the connection drops, traffic is unaffected.
@@ -35,7 +35,7 @@ certificate if it isn't from a public CA, and egress from `inkwall-system` to th
 1. Give the operator the CA and the token:
 
    ```sh
-   helm upgrade --install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.5.3 \
+   helm upgrade --install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.6.0 \
      --namespace inkwall-system --create-namespace --reset-then-reuse-values \
      --set-file controlPlane.caBundle=ca.crt \
      --set controlPlane.enrollmentToken=<token>
@@ -86,7 +86,7 @@ used without a restart.
 
 ## What the operator sends
 
-- **Cluster state:** every `WAFPolicy`, rule set and `InkwallConfig` (name, namespace, labels, spec,
+- **Cluster state:** every `WAFPolicy`, rule set, `WAFIPList` (since 0.6.0) and `InkwallConfig` (name, namespace, labels, spec,
   status conditions); for each integration (Traefik and Envoy Gateway), its controller names, the
   number of its running proxy pods and how many have the engine, and why it's disabled if the
   operator may not wire it; each connected engine and the bundle version it runs. Rules written inline in a rule set's spec are part of the
@@ -123,9 +123,11 @@ kubectl patch inkwallconfig default --type merge -p '{"spec":{"mode":"Managed"}}
 ```
 
 The leader applies each policy snapshot all or nothing, after a server-side dry run of every object
-through the CRD schema and the validating webhook. It writes `WAFPolicy`, `WAFRuleSet` and
-`ClusterWAFRuleSet` objects labelled `inkwall.dev/source: saas`, and deletes the labelled objects a
-snapshot no longer has. While in Managed mode, only the operator may change labelled objects. Your
+through the CRD schema and the validating webhook. It writes `WAFPolicy`, `WAFRuleSet`,
+`ClusterWAFRuleSet` and, since 0.6.0, `WAFIPList` objects labelled `inkwall.dev/source: saas`, and
+deletes the labelled objects a snapshot no longer has. A `WAFIPList` you labelled yourself before
+0.6.0 is pruned too: find them with `kubectl get wafiplist -A -l inkwall.dev/source=saas`, and
+remove the label before switching to Managed mode. While in Managed mode, only the operator may change labelled objects. Your
 own unlabelled objects stay yours: a snapshot with an object of the same name is refused.
 
 ## Disconnecting

@@ -1,6 +1,6 @@
 ---
 title: How it works
-description: The operator and the engine, what happens when inspection fails or the engine is unreachable, scale, and how Traefik, Envoy Gateway, Istio and HAProxy talk to the engine.
+description: The operator and the engine, what happens when inspection fails or the engine is unreachable, scale, the latency and false positives measured, and how Traefik, Envoy Gateway, Istio and HAProxy talk to the engine.
 order: 3
 ---
 
@@ -11,7 +11,7 @@ down, engines keep enforcing the last policy they received.
 
 ## The operator
 
-In v0.5.3, with Traefik, Envoy Gateway, Istio and the HAProxy Kubernetes Ingress Controller:
+In v0.6.0, with Traefik, Envoy Gateway, Istio and the HAProxy Kubernetes Ingress Controller:
 
 1. **Validates** policies and rule sets when you save them, compiling the rules with the engine's
    own Coraza version.
@@ -31,7 +31,8 @@ In v0.5.3, with Traefik, Envoy Gateway, Istio and the HAProxy Kubernetes Ingress
    Unix socket. With Istio, an `EnvoyFilter` turns ext_proc on for the protected `HTTPRoute` and
    `VirtualService` routes. With the HAProxy controller, each `Ingress` gets a backend snippet that
    calls the engine's SPOE agent. Through HAProxy and Istio, the operator sends a signed probe
-   through every pod to prove the filter is on the route before it says so. It unwires them when the policy is deleted, and when the engine can't be injected
+   through every pod to prove the filter is on the route before it says so, and, since 0.6.0, a
+   second one to prove that the route's responses reach the engine when the policy inspects them. It unwires them when the policy is deleted, and when the engine can't be injected
    (injection off, or no proxy pod it would inject), so routes are never wired to an engine that
    isn't there.
 5. **Builds a signed bundle** of every policy, and streams it to the engines, which verify the
@@ -77,7 +78,7 @@ and a rollout of 5 pods writes each policy's status 4 times instead of 20. At 5,
 didn't fit before (the ingress gateways' one `EnvoyFilter` passed etcd's size limit at about 1,200
 VirtualServices; it is sharded now), every policy was wired in 22 s, a reconcile took 0.5 s, and the
 operator peaked at 449 MiB. The measurements are in the
-[operator design](https://github.com/inkwall-dev/inkwall/blob/v0.5.3/docs/design/0004-operator.md#8-scale-targets-v1).
+[operator design](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/design/0004-operator.md#8-scale-targets-v1).
 
 ## The engine
 
@@ -92,11 +93,76 @@ compiled Core Rule Set, about 2.1 MiB of memory less for each.
 
 ![The engine's adapters (reverse proxy, forward-auth, check API) share one pipeline: route table, body limits, admission, then Coraza with the Core Rule Set, with metrics and logs.](/diagrams/engine-internals.svg)
 
-Inspection currently costs about 0.5 ms per request plus roughly 0.15 ms per request argument.
-Benchmarks run against the base branch on every pull request, and a significant regression fails
+Inspection costs about 0.5 ms of engine CPU per request plus roughly 0.15 ms per request
+argument; what it adds through each proxy, measured, is [below](#measured). Benchmarks run against the base branch on every pull request, and a significant regression fails
 the build. Engines also count, per policy, the requests they allow, deny and detect, with a latency
 histogram; the operator sends the totals to a connected [control plane](/docs/control-plane/), and
 nowhere in `Standalone` mode.
+
+## Measured
+
+Before 0.6.0, the release Inkwall is announced with, a battle test measured what it costs and what
+it gets wrong, on a laptop anyone can match. The tools are in the repository
+([battle test](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/CONTRIBUTING.md#battle-test)),
+to run on your own machine and traffic.
+
+**Latency added per proxy** (`make kind-response-load`): 8 concurrent clients, 20 s per run after a
+3 s warm-up, `GET` of an nginx HTML page of about 1 KB or 15 KB, through each proxy with a
+`Block`-mode policy, against the same proxy without one (the standalone proxy: against the app
+directly). One kind node (Kubernetes v1.34.11), one replica of each proxy, the client on the host;
+a 12th Gen Intel Core i7-1255U, 12 CPUs, 15 GiB. Added p50 / p99:
+
+| Proxy | Requests inspected, 1 KB | 15 KB | Responses inspected too, 1 KB | 15 KB |
+|---|---|---|---|---|
+| Traefik | +1.36 / +3.86 ms | +1.27 / +2.91 ms | n/a (no responses) | n/a |
+| Envoy Gateway | +1.22 / +2.77 ms | +1.38 / +3.00 ms | +2.47 / +4.82 ms | +15.57 / +20.28 ms |
+| Istio | +1.82 / +3.60 ms | +2.09 / +3.69 ms | +2.95 / +6.40 ms | +16.47 / +24.77 ms |
+| HAProxy | +1.00 / +3.23 ms | +0.95 / +2.80 ms | +1.73 / +3.86 ms | +15.57 / +23.11 ms |
+| Raw Envoy | +1.28 / +3.24 ms | +1.37 / +2.92 ms | +2.50 / +5.24 ms | +16.14 / +21.90 ms |
+| `inkwall-engine proxy` | +0.96 / +2.91 ms | +1.15 / +4.32 ms | +1.79 / +3.98 ms | +15.39 / +20.76 ms |
+
+Inspecting requests adds about 1 to 2 ms at p50 and 3 to 4 ms at p99, whatever the proxy; each
+engine peaked at 103 to 107 MiB. Inspecting a response reads its body before the client gets any of
+it, about 1 ms per KiB of HTML at this load: turn it on for the routes that can leak, and raise the
+policy's `timeout` with `responses.maxBytes`.
+
+**False positives** (`make fp-run`): 560 benign requests recorded from
+[OWASP Juice Shop](https://github.com/juice-shop/juice-shop), an online shop with an Angular front
+end and a REST API, played by six scripted shoppers with six browsers' headers (register, log in,
+search, review, check out, upload, change the password), checked against the built-in Core Rule
+Set in `Block` mode with nothing excluded. Every denial is a false positive:
+
+| Paranoia level | Denied | Rate | With `crs.allowedMethods` set |
+|---|---|---|---|
+| 1 (the default) | 23 | 4.11% | 1 (0.18%) |
+| 2 | 46 | 8.21% | 28 (5.00%) |
+| 3 | 65 | 11.61% | 49 (8.75%) |
+| 4 | 108 | 19.29% | 96 (17.14%) |
+
+At level 1, 22 of the 23 come from one rule, 911100, method enforcement: the shop's REST API takes
+`PUT` and `DELETE`, which the CRS refuses unless the policy's `crs.allowedMethods` lists them, as
+any REST API needs ([Policies](/docs/policies/)). Higher levels catch more and flag more benign
+text: start in `Detect` mode, and tune with `inkwallctl tune`.
+
+**Soak with chaos** (`make kind-soak`): every proxy on one cluster with steady clean and attack
+traffic, while the operator, an engine, a proxy pod, the API server and the bundle distribution
+are taken down in turn. One hour, 5 requests per second per proxy (one in five an attack), one
+failure every 10 minutes:
+
+| Proxy | Clean requests | Attacks denied | Attacks through | p50 / worst p99 |
+|---|---|---|---|---|
+| Traefik | 14,399 | 3,599 | 0 | 2.2 / 112 ms |
+| Envoy Gateway | 14,398 | 3,599 | 0 | 2.4 / 36 ms |
+| Istio | 14,399 | 3,599 | 0 | 2.8 / 34 ms |
+| HAProxy | 14,378 | 3,594 | 0 | 1.8 / 32 ms |
+| raw Envoy | 14,399 | 3,599 | 0 | 2.2 / 41 ms |
+| standalone proxy | 14,399 | 3,599 | 0 | 1.7 / 41 ms |
+
+No attack reached the app and no clean request was denied. Each failure was recovered from in
+3 to 30 seconds, and the engines stayed at 62 to 68 MiB, none growing more than 3 MiB. One status
+claim came early: a policy edit made seconds after the API server came back was reported
+`Enforced` through raw Envoy about 10 seconds before its engine ran it; attacks were still denied
+([#675](https://github.com/inkwall-dev/inkwall/issues/675)).
 
 ## When inspection fails
 
@@ -139,7 +205,11 @@ Each proxy uses its own native hook, so there is no extra proxy in the path.
 **Traefik ForwardAuth.** Traefik sends a subrequest describing the client request; the engine
 answers allow or deny before Traefik forwards anything. The middleware never trusts forwarded
 headers from the client (`trustForwardHeader: false`), forwards the body for inspection, and, on
-Traefik v3.7 or later, caps the size of the engine's answer (`maxResponseBodySize`, 64 KiB).
+Traefik v3.7 or later, caps the size of the engine's answer (`maxResponseBodySize`, 64 KiB). Since
+0.6.0, on Traefik v3.7 or later, the `inkwall-waf` middleware is a chain: a Buffering middleware
+bounds the request body (10 MiB + 1; a larger one gets 413), then the ForwardAuth, which no longer
+allocates its 10 MiB body limit for every request. That took Traefik's added latency from about
+8 ms to 1.3 ms at p50. Traefik never sends the engine a response.
 Behind a load balancer, see [Client IP](/docs/client-ip/).
 
 ![Traefik sends a forward-auth subrequest to the engine for each client request, and forwards the request to the app only when the engine allows it.](/diagrams/forward-auth.svg)
@@ -158,9 +228,11 @@ engine the same way; since 0.5.0, Istio's filter sends responses too.
 
 **HAProxy SPOE.** HAProxy's Stream Processing Offload Engine sends each request, with as much of
 its body as HAProxy buffers (about 15 KiB by default), to `inkwall-engine spoe`, which answers with
-a verdict that HAProxy's rules act on: 403, 413, 503, or a gRPC status for a gRPC call. The
-operator writes those rules for the HAProxy Kubernetes Ingress Controller; for any other HAProxy,
-you add them to `haproxy.cfg`.
+a verdict that HAProxy's rules act on: 403, 413, 503, or a gRPC status for a gRPC call. Since
+0.6.0, it sends responses too, for policies that inspect them: one that leaks is replaced with 403
+in block mode. A request or response too large for one SPOE frame isn't sent at all, and is handled
+as oversized (413, or 502 for a response). The operator writes those rules for the HAProxy
+Kubernetes Ingress Controller; for any other HAProxy, you add them to `haproxy.cfg`.
 
 **The check API.** For proxies without a native protocol, `POST /v1/check` takes a description of
 the request, in protobuf or JSON, and returns the verdict.
@@ -169,11 +241,13 @@ the request, in protobuf or JSON, and returns the verdict.
 
 **Reverse proxy.** Outside Kubernetes, or in front of a single service, the engine is the proxy:
 it inspects the request, then forwards it or answers itself. It forwards only what it inspected: a
-request with an absolute-form target (`GET http://host/path`) or an invalid `Host` gets a 400.
+request with an absolute-form target (`GET http://host/path`) or an invalid `Host` gets a 400. Since
+0.6.0, with `--inspect-responses`, it inspects the upstream's responses too, and streamed ones event
+by event with `--response-streams inspect`.
 
 ![The engine inspects the request, forwards allowed requests to the app, and answers denied or failed ones itself.](/diagrams/reverse-proxy.svg)
 
 What each proxy inspects (bodies, responses, gRPC messages, WebSocket handshakes and messages) is
-on [Proxies](/docs/proxies/). Caddy (a module) and protecting LLM APIs come later; see the
+on [Proxies](/docs/proxies/). Protecting LLM APIs comes later; see the
 [roadmap](/docs/roadmap/). ingress-nginx is retired upstream and not planned: see
 [Migrating from ingress-nginx](/docs/migrating-from-ingress-nginx/).

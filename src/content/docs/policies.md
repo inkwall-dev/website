@@ -97,7 +97,7 @@ the bundle, but not wired (`ControllerUnsupported`). The proxy needs the Gateway
 - **Istio** (1.28 or later): its Gateway API implementation (on by default) and the Gateway API
   CRDs. The operator adds the engine to a Gateway's pods through the ConfigMap the Gateway names,
   and an `EnvoyFilter` sends the protected routes to it
-  ([Istio](https://github.com/inkwall-dev/inkwall/blob/v0.5.3/docs/istio.md)). Since 0.5.0, a
+  ([Istio](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/istio.md)). Since 0.5.0, a
   route is `Programmed` only once the operator's probe has passed through every gateway pod
   ([below](#status)).
 
@@ -118,7 +118,7 @@ The ingress gateway's pods (labelled `istio: ingressgateway`) get the engine fro
 when they are created: restart those that ran before Inkwall. Their filters are split over the
 `EnvoyFilter` objects `inkwall-istio-ingress-00` to `-31`, so thousands of VirtualServices fit
 under etcd's size limit. See
-[VirtualServices](https://github.com/inkwall-dev/inkwall/blob/v0.5.3/docs/istio.md#virtualservices).
+[VirtualServices](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/istio.md#virtualservices).
 
 ### Core Rule Set settings
 
@@ -141,6 +141,29 @@ Both lists replace the Core Rule Set's: list every method and media type (`type/
 parameters) the application takes. `detectionParanoiaLevel` also runs the rules of the levels
 above `paranoiaLevel`, up to it, as log-only: their matches show in the events, but never block,
 so you see what they would catch before you raise `paranoiaLevel`.
+
+`allowedMethods` matters most for REST APIs: on the recorded traffic of an online shop with a REST
+API, 22 of the 23 requests the Core Rule Set denied at paranoia level 1 were its `PUT` and `DELETE`
+calls, and listing them left 1 of 560 ([How it works](/docs/how-it-works/#measured)).
+
+### Rules before the Core Rule Set
+
+A SecLang rule set loads after the Core Rule Set. Since 0.6.0, with `placement: BeforeCRS` on its
+binding, it loads before the Core Rule Set's initialization instead, so its rules can set the
+Core Rule Set's variables (`setvar:tx.…`) or turn its rules off at runtime (`ctl:ruleRemoveById`)
+on a condition of their own:
+
+```yaml
+spec:
+  ruleSets:
+  - ref: {kind: WAFRuleSet, name: shop-before-crs}
+    placement: BeforeCRS     # the default is AfterCRS
+  - ref: {kind: ClusterWAFRuleSet, name: owasp-crs-v4}
+```
+
+Such a rule set can't use `SecRuleRemoveBy*` or `SecRuleUpdate*`, which act on rules loaded before
+them (the policy is `Accepted=False`, `InvalidRef`). `inkwallctl test --policy` honours the
+placement, and the standalone engine has the same with `--rules-before-crs`.
 
 ### Exclusions
 
@@ -194,17 +217,30 @@ spec:
     inspect: true
     maxBytes: 65536         # the default
     onOversize: Deny        # or Allow
+    streams: Inspect        # since 0.6.0; the default, Skip, inspects only a stream's headers
 ```
 
 The engine also inspects what the app answers, for data leaks: the Core Rule Set's `RESPONSE-95x`
 rules find SQL errors, stack traces and directory listings. In `Block` mode a response that leaks
 is replaced with 403; in `Detect` mode it is logged, with `"phase":"response"` in the event. Since
 0.5.0, in `Detect` mode, the response to a request the rules flagged is inspected too, so what an
-attack got back is its own event. Envoy Gateway and, since 0.5.0, Istio send responses to the
-engine: on a Traefik or HAProxy route, such a policy is `Programmed=False`
-(`ResponsesNotInspected`), naming the routes, while their requests are still inspected. It costs about 0.85 ms of engine CPU per KiB of response, so a route of large HTML pages
-is CPU-bound in the engine: raise `timeout` with `maxBytes`, and measure first
-([response inspection](https://github.com/inkwall-dev/inkwall/blob/v0.5.3/docs/design/0006-adapter-protocols.md#response-inspection-v040)).
+attack got back is its own event. Envoy Gateway, Istio (since 0.5.0) and the HAProxy Kubernetes
+Ingress Controller (since 0.6.0) send responses to the engine, and the operator's probe proves it
+on every Istio and HAProxy pod before the policy is `Programmed`. Traefik's ForwardAuth never sends
+a response: on a Traefik route, such a policy is `Programmed=False` (`ResponsesNotInspected`),
+naming the routes, while their requests are still inspected.
+
+Streamed responses, Server-Sent Events and gRPC, pass with their status and headers inspected,
+unless `streams: Inspect` (since 0.6.0, through Envoy Gateway and Istio): each event, or each
+message of a gRPC response and its status message, is then inspected on its own, and in `Block`
+mode one that leaks ends the stream; the client keeps the events before it. HAProxy doesn't send a
+streamed body, so on its Ingresses such a policy is `ResponsesNotInspected`.
+
+Inspecting a response reads its body before the client gets any of it: about 1 ms per KiB of HTML,
+so a 15 KB page took about 15 ms more through every proxy
+([measured](/docs/how-it-works/#measured)). Turn it on for the routes that can leak, raise
+`timeout` with `maxBytes`, and measure first
+([response inspection](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/design/0006-adapter-protocols.md#response-inspection-v040)).
 
 ### WebSocket handshakes
 
@@ -222,7 +258,7 @@ gets 403 before the upgrade in `Block` mode, and is logged with reason `websocke
 mode. `allowMissingOrigin: true` lets a client that sends no `Origin` through. The handshake's URL
 and headers are inspected by the rules through every proxy; the messages after the upgrade are not,
 except by the engine's own reverse proxy
-([WebSocket](https://github.com/inkwall-dev/inkwall/blob/v0.5.3/docs/websocket.md)).
+([WebSocket](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/websocket.md)).
 
 ### Engines too old for a policy
 
@@ -230,7 +266,8 @@ An older engine ignores the fields it doesn't know:
 
 - new in 0.4.0: `webSocket`, `body.grpcMessages: Inspect` and `responses`;
 - new in 0.5.0: `ipLists`, the Core Rule Set's `crs` settings, exclusions for an argument name, a
-  cookie or a header, and `body.grpc`.
+  cookie or a header, and `body.grpc`;
+- new in 0.6.0: `placement: BeforeCRS`, `responses.streams` and `body.grpcStreams`.
 
 While such an engine runs a policy that sets one, the policy is `Enforced=False`, reason
 `EnginesOutdated`, naming the first such engine: restart the proxy's pods so they get the current
@@ -295,7 +332,7 @@ Each policy reports how far it got, as conditions that work with `kubectl wait` 
 | Condition | True when | Typical reasons when false |
 |---|---|---|
 | `Accepted` | The policy is valid, its references resolve, and the bundle with it fits | `InvalidRef`, `Conflict`, `TargetUnsupported`, `BundleTooLarge` |
-| `Programmed` | The proxy of every target sends its routes to the engine | `PendingRestart` (restart Traefik to inject the engine), `SidecarMissing`, `InjectionDisabled`, `IntegrationDisabled`, `ControllerUnsupported`, `WiringFailed`, `ResponsesNotInspected` (the policy inspects responses on a proxy that doesn't send them), `Unverified` (HAProxy and Istio: the operator's probe hasn't proven the filter on every pod yet; Istio routes whose policies are all in `Detect` mode stay so), `NotProbeable` (Istio: a route the probe can't reach, such as one matched only by regular expressions, or with mutual TLS), `Unwired` (after `helm uninstall`) |
+| `Programmed` | The proxy of every target sends its routes to the engine | `PendingRestart` (restart Traefik to inject the engine), `SidecarMissing`, `InjectionDisabled`, `IntegrationDisabled`, `ControllerUnsupported`, `WiringFailed`, `ResponsesNotInspected` (the policy inspects responses on a proxy that doesn't send them), `Unverified` (HAProxy and Istio: the operator's probe hasn't proven the filter, or for a policy with `responses.inspect` the responses, on every pod yet), `NotProbeable` (Istio: a route the probe can't reach, such as one matched only by regular expressions, or with mutual TLS), `Unwired` (after `helm uninstall`) |
 | `Enforced` | Every engine that serves the policy's routes runs a bundle with this policy as it is, and inspection isn't suspended | `EnginesBehind`, `EngineNack`, `EnginesUnreported`, `EnginesOutdated` (an engine too old for a field the policy sets), `NoEngines`, `Suspended` |
 | `Ready` | All three | `Suspended` while inspection is [suspended](/docs/operations/), else the first failing condition's reason |
 

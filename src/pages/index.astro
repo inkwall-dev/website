@@ -8,7 +8,7 @@ const features = [
   },
   {
     title: 'Fast by design',
-    body: 'The engine runs next to the proxy, inside its pod, and skips what doesn’t need inspection before any rule runs. Benchmarks gate every pull request.',
+    body: 'The engine runs next to the proxy, inside its pod, and skips what doesn’t need inspection before any rule runs. Measured through each of the six proxies, inspecting a request adds about 1 to 2 ms at p50 and 3 to 4 ms at p99. Benchmarks gate every pull request.',
   },
   {
     title: 'Safe by default',
@@ -24,7 +24,11 @@ const features = [
   },
   {
     title: 'Responses, gRPC and WebSockets',
-    body: 'Inspect what the app answers for data leaks, through Envoy Gateway and Istio. Read the text in gRPC messages, and answer a denied call with a gRPC status. Allow WebSocket handshakes only from your own origins.',
+    body: 'Inspect what the app answers for data leaks, through Envoy Gateway, Istio, HAProxy and the standalone proxy, and Server-Sent Events and gRPC responses event by event. Read the text in gRPC messages, one at a time on long streams, and answer a denied call with a gRPC status. Allow WebSocket handshakes only from your own origins.',
+  },
+  {
+    title: 'Ask why',
+    body: 'inkwallctl explain says why a policy isn’t Ready, and why a request was denied: the rules, the score and the narrowest exclusion, checked against your policy. inkwallctl mcp serves the same answers to Claude Code, Cursor or VS Code, read-only, from your machine.',
   },
   {
     title: 'Test rules without traffic',
@@ -36,7 +40,7 @@ const features = [
   },
   {
     title: 'See what happens',
-    body: 'inkwallctl status checks the whole cluster. Each security event says which rule matched where, never the value. Alerts and a Grafana dashboard come with the chart, off by default, and health checks let Argo CD and Flux wait for a policy to be Ready.',
+    body: 'inkwallctl status checks the whole cluster. Through Istio and HAProxy, a policy is Ready only once the operator’s signed probe has proven its routes, responses included. Each security event says which rule matched where, never the value. Alerts and a Grafana dashboard come with the chart, off by default, and health checks let Argo CD and Flux wait for a policy to be Ready.',
   },
   {
     title: 'GitOps first, SaaS optional',
@@ -46,15 +50,14 @@ const features = [
 
 type State = 'works' | 'progress' | 'planned';
 const integrations: { name: string; hook: string; state: State; note: string }[] = [
-  { name: 'Standalone reverse proxy', hook: 'HTTP', state: 'works', note: 'In front of any HTTP service, in or out of Kubernetes' },
-  { name: 'Traefik', hook: 'ForwardAuth', state: 'works', note: 'Since v0.1.0; the operator injects the engine and wires Ingress, IngressRoute and, since v0.3.0, Gateway API HTTPRoute routes' },
-  { name: 'Envoy Gateway (Gateway API)', hook: 'ext_proc', state: 'works', note: 'Since v0.3.0, with Envoy Gateway v1.9: the engine joins the Envoy pods, and each protected HTTPRoute calls it over ext_proc; since v0.4.0, responses too' },
-  { name: 'Istio', hook: 'ext_proc', state: 'works', note: 'Since v0.4.0, Istio 1.28 or later: HTTPRoutes of its Gateways, and VirtualServices of its ingress gateways, proven by the operator’s probe; since v0.5.0, responses too' },
-  { name: 'HAProxy Kubernetes Ingress Controller', hook: 'SPOE', state: 'works', note: 'Since v0.4.0, 3.1 or later: the operator injects the engine and wires its Ingresses' },
+  { name: 'Standalone reverse proxy', hook: 'HTTP', state: 'works', note: 'In front of any HTTP service, in or out of Kubernetes; HTTP/2, gRPC and WebSocket messages; since v0.6.0, responses too' },
+  { name: 'Traefik', hook: 'ForwardAuth', state: 'works', note: 'Since v0.1.0; the operator injects the engine and wires Ingress, IngressRoute and, since v0.3.0, Gateway API HTTPRoute routes; since v0.6.0, about 1.3 ms added at p50 on Traefik v3.7 or later. Requests only: ForwardAuth never sees a response' },
+  { name: 'Envoy Gateway (Gateway API)', hook: 'ext_proc', state: 'works', note: 'Since v0.3.0, with Envoy Gateway v1.9: the engine joins the Envoy pods, and each protected HTTPRoute calls it over ext_proc; since v0.4.0, responses too; since v0.6.0, streamed responses and gRPC streams per message' },
+  { name: 'Istio', hook: 'ext_proc', state: 'works', note: 'Since v0.4.0, Istio 1.28 or later: HTTPRoutes of its Gateways, and VirtualServices of its ingress gateways, proven by the operator’s probe; since v0.5.0, responses too; since v0.6.0, streamed responses, gRPC streams per message, and Detect-mode routes proven' },
+  { name: 'HAProxy Kubernetes Ingress Controller', hook: 'SPOE', state: 'works', note: 'Since v0.4.0, 3.1 or later: the operator injects the engine and wires its Ingresses; since v0.6.0, responses too' },
   { name: 'Raw Envoy, HAProxy', hook: 'ext_proc, SPOE', state: 'works', note: 'Since v0.4.0: an Envoy or HAProxy you configure yourself calls the engine' },
   { name: 'Any proxy with a hook', hook: 'POST /v1/check', state: 'works', note: 'The engine’s own API, protobuf or JSON' },
   { name: 'Kubernetes operator', hook: 'CRDs', state: 'works', note: 'Validation, signed bundles with key rotation, injection, wiring, proxy discovery and status; a role per integration; an opt-in automatic engine rollout; per-policy request counts; scale-tested with 5,000 policies and 500 fake engines at a median peak of 409 MiB; Helm chart on GHCR' },
-  { name: 'Caddy', hook: 'Module', state: 'planned', note: '' },
 ];
 const label: Record<State, string> = { works: 'Works today', progress: 'Next', planned: 'Planned' };
 ---
@@ -64,7 +67,7 @@ const label: Record<State, string> = { works: 'Works today', progress: 'Next', p
 >
   <section class="hero">
     <div class="container">
-      <p class="status"><span class="dot" aria-hidden="true"></span> v0.5.3, v0.4.2 and v0.3.4 are out: security fixes</p>
+      <p class="status"><span class="dot" aria-hidden="true"></span> v0.6.0 is out: <a href="/blog/inkwall-v0-6-0/">six proxies, measured</a></p>
       <h1>One web application firewall for every ingress in your cluster</h1>
       <p class="sub">
         Inkwall protects HTTP traffic behind any proxy with the same policy. Write a <code>WAFPolicy</code>,
@@ -157,7 +160,7 @@ const label: Record<State, string> = { works: 'Works today', progress: 'Next', p
       </div>
       <pre><code>$ helm install inkwall \
     oci://ghcr.io/inkwall-dev/charts/inkwall \
-    --version 0.5.3 \
+    --version 0.6.0 \
     -n inkwall-system --create-namespace
 $ kubectl get wafpolicy -n shop
 NAME   MODE    READY   REASON   BUNDLE   AGE

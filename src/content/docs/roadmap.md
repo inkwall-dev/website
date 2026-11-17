@@ -1,6 +1,6 @@
 ---
 title: Roadmap
-description: What each release ships, from v0.1.0 to v0.5.3, and what the next milestones bring.
+description: What each release ships, from v0.1.0 to v0.6.0, and what the next milestones bring.
 order: 11
 ---
 
@@ -185,38 +185,66 @@ A security release for 0.5 ([release post](/blog/inkwall-v0-5-2/)):
   large for one SPOE frame passed uninspected when a `Block`-mode policy failed open. It is now
   handled as oversized, as `body.onOversize` says (413 in `Block` mode).
 
-## v0.5.3, v0.4.2 and v0.3.4: security fixes
+## v0.5.4 and v0.4.3: security fixes
 
-Patch releases for the 0.5, 0.4 and 0.3 lines ([release post](/blog/inkwall-v0-5-3-and-v0-4-2/)):
+Security releases for the 0.5 and 0.4 lines, with the same fixes as v0.6.0
+([release post](/blog/inkwall-v0-5-4-and-v0-4-3/)). 0.3 left support with v0.6.0 and isn't
+patched:
 
-- [GHSA-m382-qw6g-4qmj](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-m382-qw6g-4qmj)
-  (low, 0.5.3), updated: through Traefik (ForwardAuth), 0.5.0 to 0.5.2 still quoted an invalid
-  `X-Forwarded-Host` in the engine's error log. It is now logged by name, not value, as every
-  other parse error is. 0.4.x isn't patched for it.
-- 0.4.2 and 0.3.4 are built with Go 1.27.4, for
-  [GO-2026-6859](https://pkg.go.dev/vuln/GO-2026-6859) in `net/http`, as 0.5.1 is.
+- [GHSA-c52q-5h8m-279w](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-c52q-5h8m-279w)
+  (high): in bundle mode, a path with dot segments, encoded characters or repeated slashes could
+  select a weaker policy than the route it reached. Every path form is now inspected with its
+  policy, and the strictest verdict wins.
+- [GHSA-r2m3-77h9-hq8v](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-r2m3-77h9-hq8v)
+  (high): on a shared proxy fleet, a namespace's `WAFPolicy` could weaken or freeze another
+  namespace's protection.
+- [GHSA-9rmr-w4mp-34f3](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-9rmr-w4mp-34f3)
+  (high): the standalone proxy forwarded non-WebSocket upgrades such as `h2c`. It and HAProxy now
+  forward only WebSocket upgrades.
+- [GHSA-6vg9-25gh-3327](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-6vg9-25gh-3327)
+  (medium): response inspection skipped bodies by media type, `Range` and `Content-Encoding` list.
+- [GHSA-m6qq-cj2f-9h75](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-m6qq-cj2f-9h75)
+  (medium): gRPC message fields with control characters weren't inspected, and, in 0.5, some
+  event snippets weren't redacted.
+- [GHSA-pjxq-6323-wcr3](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-pjxq-6323-wcr3)
+  (medium): `inkwallctl migrate ingress-nginx` could produce a broader exclusion than the source
+  rules.
 
-## v0.6.0: assistants, next
+## v0.6.0: responses everywhere they can go, assistants, and the battle test
 
-The [milestone](https://github.com/inkwall-dev/inkwall/milestone/18):
+The [milestone](https://github.com/inkwall-dev/inkwall/milestone/18), the release Inkwall is
+announced with ([release post](/blog/inkwall-v0-6-0/)):
 
-- `inkwallctl explain`, for a denied request or a policy that isn't `Ready`
-  ([#438](https://github.com/inkwall-dev/inkwall/issues/438)), and an MCP server with read-only
-  tools for AI assistants ([#439](https://github.com/inkwall-dev/inkwall/issues/439)), from a design
-  ([#437](https://github.com/inkwall-dev/inkwall/issues/437)).
-- Responses through HAProxy ([#469](https://github.com/inkwall-dev/inkwall/issues/469),
-  [#470](https://github.com/inkwall-dev/inkwall/issues/470)), and through Traefik and the reverse
-  proxy, with streamed responses ([#323](https://github.com/inkwall-dev/inkwall/issues/323)).
+- Responses through the HAProxy Kubernetes Ingress Controller and an HAProxy you configure
+  ([#469](https://github.com/inkwall-dev/inkwall/issues/469),
+  [#470](https://github.com/inkwall-dev/inkwall/issues/470)) and through the standalone proxy;
+  streamed responses (Server-Sent Events, gRPC) inspected event by event through Envoy
+  ([#323](https://github.com/inkwall-dev/inkwall/issues/323)). Not through Traefik, whose
+  ForwardAuth never sees a response ([Proxies](/docs/proxies/)).
 - gRPC streams inspected per message
-  ([#315](https://github.com/inkwall-dev/inkwall/issues/315)), and the server's messages
-  ([#317](https://github.com/inkwall-dev/inkwall/issues/317)).
-- HAProxy bodies past its buffer ([#336](https://github.com/inkwall-dev/inkwall/issues/336)); rule
-  sets loaded before the Core Rule Set ([#423](https://github.com/inkwall-dev/inkwall/issues/423));
-  the operator's metrics over HTTPS ([#430](https://github.com/inkwall-dev/inkwall/issues/430));
-  `Detect`-mode Istio routes proven by the probe
-  ([#475](https://github.com/inkwall-dev/inkwall/issues/475)).
+  ([#315](https://github.com/inkwall-dev/inkwall/issues/315)), and the server's messages and status
+  message ([#317](https://github.com/inkwall-dev/inkwall/issues/317)) ([gRPC](/docs/grpc/)).
+- Status that proves it: the operator's probe proves responses
+  ([#595](https://github.com/inkwall-dev/inkwall/issues/595)), and `Detect`-mode Istio routes by
+  the engine's probe receipts ([#475](https://github.com/inkwall-dev/inkwall/issues/475)).
+- `inkwallctl explain`, for a denied request or a policy that isn't `Ready`
+  ([#438](https://github.com/inkwall-dev/inkwall/issues/438)), and a read-only MCP server for AI
+  assistants ([#439](https://github.com/inkwall-dev/inkwall/issues/439)), from a design
+  ([#437](https://github.com/inkwall-dev/inkwall/issues/437)) ([Monitoring](/docs/monitoring/)).
+- Rule sets loaded before the Core Rule Set
+  ([#423](https://github.com/inkwall-dev/inkwall/issues/423)); the operator's metrics over HTTPS
+  ([#430](https://github.com/inkwall-dev/inkwall/issues/430)); HAProxy bodies and responses past
+  an SPOE frame handled as oversized ([#336](https://github.com/inkwall-dev/inkwall/issues/336));
+  `WAFIPList` in Managed mode ([#577](https://github.com/inkwall-dev/inkwall/issues/577)); the Go
+  memory limit from the container's cgroup
+  ([#537](https://github.com/inkwall-dev/inkwall/issues/537)).
+- Traefik's added latency down from about 8 ms to 1.3 ms at p50
+  ([#625](https://github.com/inkwall-dev/inkwall/issues/625)).
+- The battle test ([#600](https://github.com/inkwall-dev/inkwall/issues/600)): a soak of every
+  proxy with chaos, the false positives of an application's recorded traffic per paranoia level,
+  and the latency each proxy adds ([How it works](/docs/how-it-works/#measured)).
 
-## v1.0.0: a stable API
+## v1.0.0: a stable API, next
 
 The CRDs out of `v1alpha1`, with an upgrade path and a compatibility promise.
 
@@ -228,7 +256,6 @@ The CRDs out of `v1alpha1`, with an upgrade path and a compatibility promise.
   ([#316](https://github.com/inkwall-dev/inkwall/issues/316)).
 - Protecting LLM APIs against the OWASP Top 10 for LLM applications
   ([#277](https://github.com/inkwall-dev/inkwall/issues/277)).
-- Caddy (a module).
 
 ingress-nginx is not planned: it is retired upstream. For its users, Inkwall's answer is
 migration: `inkwallctl migrate ingress-nginx` turns its ModSecurity annotations into policies, see

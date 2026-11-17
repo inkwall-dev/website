@@ -4,7 +4,7 @@ description: Install Inkwall with Helm, protect a Traefik or Envoy Gateway route
 order: 1
 ---
 
-> Inkwall v0.5.3 works with **Traefik** (`Ingress`, `IngressRoute` and Gateway API `HTTPRoute`
+> Inkwall v0.6.0 works with **Traefik** (`Ingress`, `IngressRoute` and Gateway API `HTTPRoute`
 > routes), **Envoy Gateway** and **Istio** (`HTTPRoute` routes, and Istio's `VirtualService`
 > routes), and the **HAProxy Kubernetes Ingress Controller** (`Ingress` routes); and, without the
 > operator, with an Envoy or HAProxy you configure yourself. What each one inspects is on
@@ -12,15 +12,15 @@ order: 1
 > `v1alpha1` and will change. Upgrading from 0.4.x? See [Upgrading](/docs/upgrading/).
 
 To try it on your laptop first, the
-[quickstart](https://github.com/inkwall-dev/inkwall/blob/v0.5.3/docs/quickstart.md) goes from
+[quickstart](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/quickstart.md) goes from
 nothing to a blocked attack in about five minutes, on a kind cluster with the released chart,
-Traefik and a demo app; [`examples/`](https://github.com/inkwall-dev/inkwall/tree/v0.5.3/examples)
+Traefik and a demo app; [`examples/`](https://github.com/inkwall-dev/inkwall/tree/v0.6.0/examples)
 has the same app behind Traefik, Envoy Gateway and Istio.
 
 ## Install
 
 ```sh
-helm install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.5.3 \
+helm install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.6.0 \
   --namespace inkwall-system --create-namespace
 kubectl -n inkwall-system rollout status deployment/inkwall-operator
 ```
@@ -110,7 +110,7 @@ Images, the chart and the binaries' checksums are signed keyless with cosign, fr
 workflow. Verify them with cosign v3 or later: cosign v2 reports `no signatures found`.
 
 ```sh
-cosign verify ghcr.io/inkwall-dev/inkwall-engine:0.5.3 \
+cosign verify ghcr.io/inkwall-dev/inkwall-engine:0.6.0 \
   --certificate-identity-regexp '^https://github.com/inkwall-dev/inkwall/\.github/workflows/release\.yaml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
@@ -143,6 +143,7 @@ Main flags (`inkwall-engine proxy -h` for all):
 | `--websocket-origins`, `--websocket-required-headers` | | Origins a WebSocket handshake may come from, headers it must have |
 | `--websocket-messages` | `off` | `inspect` or `text-only`: inspect each text message a client sends on a WebSocket; a denied one closes it with 1008 |
 | `--grpc-messages` | `skip` | `inspect`: read the text in gRPC messages ([gRPC](/docs/grpc/)) |
+| `--inspect-responses` | off | Inspect the upstream's responses too, for data leaks (since 0.6.0); with `--response-streams inspect`, Server-Sent Events and gRPC responses event by event, and `--max-response-bytes` (`65536`), `--max-held-response-bytes` (64 MiB) |
 | `--websocket-idle-timeout`, `--max-connections`, `--body-read-timeout` | off | Limits for long-lived connections; on shutdown, WebSockets get `1001` |
 | `--max-body-bytes` | `65536` | Body bytes inspected |
 | `--failure-mode` | `auto` | Uninspectable requests: closed in block mode, open in detect mode |
@@ -154,9 +155,10 @@ Main flags (`inkwall-engine proxy -h` for all):
 
 Each blocked or detected request logs one JSON line with the rule IDs and where each matched
 (`942100@ARGS:q`, never the value), at most 10 lines per second for each policy and rule; metrics are on
-`:9480/metrics`. The proxy accepts only origin-form request targets (`GET /path`): an absolute-form
+`:9480/metrics`. Since 0.6.0, in a container with a memory limit (`docker run --memory 256m`), the
+engine sets its Go memory limit to 90% of it. The proxy accepts only origin-form request targets (`GET /path`): an absolute-form
 target (`GET http://host/path`) or an invalid `Host` gets a 400. The guide,
-[running the engine without Kubernetes](https://github.com/inkwall-dev/inkwall/blob/v0.5.3/docs/standalone-proxy.md),
+[running the engine without Kubernetes](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/standalone-proxy.md),
 also covers the engine's `forward-auth`, `check`, `ext-proc` (Envoy's external processing API over
 gRPC) and `spoe` (HAProxy's SPOE) modes; see [Proxies](/docs/proxies/).
 

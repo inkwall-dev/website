@@ -45,10 +45,12 @@ jobs:
         uses: lycheeverse/lychee-action@v2
         with:
           # Internal links and #anchors in the built site; external links
-          # are not checked, so a third-party outage can't fail a build.
+          # are not checked, so a third-party outage can't fail a build. A
+          # link to /docs/page/#anchor reads the anchor from page/index.html.
           args: >-
             --offline
             --include-fragments
+            --index-files index.html
             --no-progress
             --root-dir ${{ github.workspace }}/dist
             'dist/**/*.html'
