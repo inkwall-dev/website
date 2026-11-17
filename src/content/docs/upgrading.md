@@ -316,6 +316,30 @@ Nothing below changes a policy you have: the new fields and settings are off unl
 - **Helm 4**: the chart keeps the operator's Pod webhook settings on upgrade. With Helm 4, roll
   back to 0.4.x with `helm rollback --force-conflicts`.
 
+## From 0.4.1 to 0.4.2
+
+0.4.2 is a patch release with no API or chart change: upgrade the chart as for 0.4.1, then restart
+the pods that run the engine (Traefik, Istio's Gateways, HAProxy and the Envoy Gateway proxies) so
+their engines are 0.4.2:
+
+```sh
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.4.2 \
+  --namespace inkwall-system --reset-then-reuse-values
+kubectl -n inkwall-system rollout status deployment/inkwall-operator
+kubectl -n <traefik namespace> rollout restart deployment/<traefik>
+```
+
+What changes by itself:
+
+- **Built with Go 1.27.4**, for
+  [GO-2026-6859](https://pkg.go.dev/vuln/GO-2026-6859), as 0.5.1 is: an HTTP/1 server using
+  `net/http`'s `MaxBytesReader` could panic when its limit was exceeded while the handler wrote
+  headers. The engine's and the operator's HTTP servers use it.
+
+0.4.x is not patched for
+[GHSA-m382-qw6g-4qmj](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-m382-qw6g-4qmj)
+(request values in the engine's parse-error log lines): upgrade to 0.5.3, or apply its workaround.
+
 ## From 0.4.0 to 0.4.1
 
 0.4.1 is a patch release with security fixes: upgrade the chart as for 0.4.0, then restart the pods
@@ -346,6 +370,22 @@ What changes by itself:
 - **The engine sets a Go memory limit.** It sets `GOMEMLIMIT` to 90% of its container's memory
   limit, as the operator does, unless `GOMEMLIMIT` is set. A request body over the inspected limit
   keeps only the inspected part in the engine's memory.
+
+## From 0.3.3 to 0.3.4
+
+0.3.4 is a patch release with no API or chart change: upgrade the chart as for 0.3.3, with
+`--version 0.3.4`, then restart Traefik and the Envoy Gateway proxies so their engines are 0.3.4.
+What changes by itself:
+
+- **Built with Go 1.27.4**, for
+  [GO-2026-6859](https://pkg.go.dev/vuln/GO-2026-6859), as 0.4.2 and 0.5.1 are: an HTTP/1 server
+  using `net/http`'s `MaxBytesReader` could panic when its limit was exceeded while the handler
+  wrote headers.
+
+0.3 leaves support when 0.6.0 is released (the newest three minor versions are supported): plan
+the upgrade to 0.5.3, or to 0.6.0 when it's out. 0.3.x is not patched for the advisories fixed in
+later minor versions, such as
+[GHSA-m382-qw6g-4qmj](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-m382-qw6g-4qmj).
 
 ## From 0.3.2 to 0.3.3
 
