@@ -27,8 +27,18 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      # What ships: the site's own dependencies, not the build tooling.
-      - run: npm audit --omit=dev --audit-level=high
+      # What ships: the site's own dependencies, not the build tooling. Fails
+      # on any high or critical advisory but GHSA-fc5q-39xc-vjpf (picomatch
+      # ReDoS through repeated extglobs, no patched version yet): picomatch
+      # runs only at build time, on the site's own glob patterns. Drop the
+      # exception once picomatch has a fix.
+      - run: |
+          npm audit --omit=dev --json > audit.json || true
+          jq -r '[.vulnerabilities[].via[] | objects | select(.severity == "high" or .severity == "critical") | .url] | unique | .[]' audit.json > high.txt
+          grep -vxF https://github.com/advisories/GHSA-fc5q-39xc-vjpf high.txt > blocking.txt || true
+          if [ -s blocking.txt ]; then
+            echo "::error::high or critical advisories:"; cat blocking.txt; exit 1
+          fi
       # Type checks (astro check), then builds into dist/.
       - run: npm run build
       - name: Check links
