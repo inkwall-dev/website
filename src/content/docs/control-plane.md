@@ -87,7 +87,8 @@ used without a restart.
 ## What the operator sends
 
 - **Cluster state:** every `WAFPolicy`, rule set, `WAFIPList` (since 0.6.0) and `InkwallConfig` (name, namespace, labels, spec,
-  status conditions); for each integration (Traefik and Envoy Gateway), its controller names, the
+  status conditions); for each integration (Traefik, Envoy Gateway, Istio, Istio's ingress gateways
+  and HAProxy), its controller names, the
   number of its running proxy pods and how many have the engine, and why it's disabled if the
   operator may not wire it; each connected engine and the bundle version it runs. Rules written inline in a rule set's spec are part of the
   spec, so they're sent.

@@ -86,7 +86,8 @@ the migration, `kubectl delete -f waf/`.
 - **CRS version.** Inkwall runs CRS v4; older ingress-nginx releases shipped CRS v3. Check
   exclusions of v3 rules.
 - **Responses.** `SecResponseBodyAccess` isn't converted: set `responses: {inspect: true}` on a
-  policy to run the CRS's response rules, on routes Envoy Gateway or Istio serves.
+  policy to run the CRS's response rules, on routes Envoy Gateway, Istio or the HAProxy Kubernetes
+  Ingress Controller serves.
 - **Body limits.** Inkwall inspects up to `body.maxBytes` (64 KiB by default, 10 MiB at most) and, in
   block mode, rejects larger bodies with 413. Set `body.maxBytes` or `body.onOversize: Allow` on
   routes that take large uploads.

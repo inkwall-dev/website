@@ -12,7 +12,7 @@ const features = [
   },
   {
     title: 'Safe by default',
-    body: 'New routes start in detect mode: log, never block. In block mode nothing is forwarded uninspected; a request that can’t be inspected in time is rejected. If the proxy can’t reach the engine at all, it answers 500, unless every policy on an Envoy Gateway route fails open.',
+    body: 'New routes start in detect mode: log, never block. In block mode nothing is forwarded uninspected; a request that can’t be inspected in time is rejected. If the proxy can’t reach the engine at all, it refuses the request (500 through Traefik and Envoy Gateway, 503 through Istio and HAProxy), unless, on an Envoy or HAProxy route, its policies fail open.',
   },
   {
     title: 'Policy as Kubernetes objects',
