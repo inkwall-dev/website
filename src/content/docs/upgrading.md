@@ -875,7 +875,7 @@ Roll back to 0.2.2 rather than 0.2.0 or 0.2.1, which are affected by GHSA-r5cq-6
 
 ## From 0.1.x
 
-Upgrade to 0.2.2 first. On the way, every `WAFPolicy` gets the finalizer `waf.inkwall.dev/unwire`
+Upgrade to 0.2.2 first, then to 0.2.3 ([From 0.2.2 to 0.2.3](#from-022-to-023)). On the way, every `WAFPolicy` gets the finalizer `waf.inkwall.dev/unwire`
 (from 0.1.0), which matters if Argo CD or Flux manages them ([GitOps](/docs/gitops/)), and bundles
 past 900 KiB compressed are split into chunk Secrets, which 0.1.x can't read. The full guide's
 [0.1.x section](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/upgrading.md#from-01x-to-022)

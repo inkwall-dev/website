@@ -9,7 +9,7 @@ order: 1
 > routes), and the **HAProxy Kubernetes Ingress Controller** (`Ingress` routes); and, without the
 > operator, with an Envoy or HAProxy you configure yourself. What each one inspects is on
 > [Proxies](/docs/proxies/). You need Kubernetes 1.29 or later and Helm 3 or 4. The API is
-> `v1alpha1` and will change. Upgrading from 0.4.x? See [Upgrading](/docs/upgrading/).
+> `v1alpha1` and will change. Upgrading from 0.5.x? See [Upgrading](/docs/upgrading/).
 
 To try it on your laptop first, the
 [quickstart](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/quickstart.md) goes from
@@ -40,11 +40,11 @@ For `HTTPRoute` targets served by Traefik, install the
 and turn on Traefik's Gateway API provider (`providers.kubernetesGateway.enabled=true` in its
 chart).
 
-Envoy Gateway (v1.9) needs no restart: it rolls the Envoy pods of a Gateway when the Gateway gets
-its first protected route. Turn on its Backend API, which the engine's socket needs:
+Envoy Gateway (tested with v1.10.0) needs no restart: it rolls the Envoy pods of a Gateway when the
+Gateway gets its first protected route. Turn on its Backend API, which the engine's socket needs:
 
 ```sh
-helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm --version v1.9.3 \
+helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm --version v1.10.0 \
   --namespace envoy-gateway-system --create-namespace \
   --set config.envoyGateway.extensionApis.enableBackend=true
 ```

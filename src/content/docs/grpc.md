@@ -53,8 +53,9 @@ spec:
 (The engine's flag, without the operator: `--grpc-messages inspect`.)
 
 - **What is read:** the body, up to `body.maxBytes`, as gRPC messages, each read as protobuf
-  without its schema. A field whose bytes are printable UTF-8 is text; a nested message is read as
-  one, down to 16 levels. `grpc-encoding: gzip` is decompressed, up to 1 MiB per call.
+  without its schema. A field whose bytes are UTF-8 is text (a control character read as a space);
+  a nested message is read as one, down to 16 levels; a binary field gives its runs of readable
+  characters. `grpc-encoding: gzip` is decompressed, up to 1 MiB per call.
 - **What the rules see:** each text field as a form argument named by its field numbers (`2.1` is
   field 1 of the message in field 2). An attack in a field is denied as in a form, and an exclusion
   names one as any argument (`when: {argument: "2.1"}`).
