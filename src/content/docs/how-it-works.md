@@ -78,7 +78,7 @@ and a rollout of 5 pods writes each policy's status 4 times instead of 20. At 5,
 didn't fit before (the ingress gateways' one `EnvoyFilter` passed etcd's size limit at about 1,200
 VirtualServices; it is sharded now), every policy was wired in 22 s, a reconcile took 0.5 s, and the
 operator peaked at 449 MiB. The measurements are in the
-[operator design](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/design/0004-operator.md#8-scale-targets-v1).
+[operator design](https://github.com/inkwall-dev/inkwall/blob/v0.6.1/docs/design/0004-operator.md#8-scale-targets-v1).
 
 ## The engine
 
@@ -103,7 +103,7 @@ nowhere in `Standalone` mode.
 
 Before 0.6.0, the release Inkwall is announced with, a battle test measured what it costs and what
 it gets wrong, on a laptop anyone can match. The tools are in the repository
-([battle test](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/CONTRIBUTING.md#battle-test)),
+([battle test](https://github.com/inkwall-dev/inkwall/blob/v0.6.1/CONTRIBUTING.md#battle-test)),
 to run on your own machine and traffic.
 
 **Latency added per proxy** (`make kind-response-load`): 8 concurrent clients, 20 s per run after a

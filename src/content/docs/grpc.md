@@ -12,7 +12,7 @@ v0.6.0, through Envoy, a call's messages can be inspected one at a time as they 
 streams and bidirectional calls work in `Block` mode, and what the server sends back can be
 inspected too. Before
 v0.3.1, the Core Rule Set denied every gRPC call in `Block` mode and logged it in `Detect` mode. The
-full guide is [`docs/grpc.md`](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/grpc.md).
+full guide is [`docs/grpc.md`](https://github.com/inkwall-dev/inkwall/blob/v0.6.1/docs/grpc.md).
 
 ## Which requests are gRPC calls
 

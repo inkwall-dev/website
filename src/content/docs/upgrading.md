@@ -19,7 +19,7 @@ From any 0.2 release, upgrade to 0.3.0 first, as in
 release, as in [From 0.2.2 to 0.2.3](#from-022-to-023). From 0.1.x, upgrade to 0.2.3 first, then
 to 0.3.0. The
 full guide is
-[`docs/upgrading.md`](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/upgrading.md).
+[`docs/upgrading.md`](https://github.com/inkwall-dev/inkwall/blob/v0.6.1/docs/upgrading.md).
 
 ## From 0.5.x to 0.6.0
 
@@ -29,9 +29,9 @@ Gateways' pods themselves; with `InkwallConfig.spec.engine.rollout: Automatic` t
 restarts the pods it injects for you):
 
 ```sh
-helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.6.0 \
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.6.1 \
   --namespace inkwall-system --reset-then-reuse-values --dry-run
-helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.6.0 \
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.6.1 \
   --namespace inkwall-system --reset-then-reuse-values
 kubectl -n inkwall-system rollout status deployment/inkwall-operator
 kubectl -n <traefik namespace> rollout restart deployment/<traefik>
@@ -40,7 +40,7 @@ kubectl -n <traefik namespace> rollout restart deployment/<traefik>
 Restart the HAProxy controller and Istio's ingress gateways the same way. Until a pod runs the
 0.6.0 engine, a policy that uses a 0.6.0 field is `Enforced=False` (`EnginesOutdated`). If you
 install the CRDs yourself, apply 0.6.0's first, as in [From 0.4.x to 0.5.0](#from-04x-to-050)
-with `--version 0.6.0`.
+with `--version 0.6.1`.
 
 **With Traefik, upgrade Traefik and its CRDs together to v3.7 or later** to get its faster
 Middleware ([below](#what-changes-by-itself-in-060)); before v3.7 nothing changes for Traefik.
@@ -58,10 +58,10 @@ set them.
   naming the pods. A pinned `spec.engine.image` must be 0.6.0 or later. With HAProxy configured by
   hand, `inkwall-engine spoe --inspect-responses` and the new lines of `examples/haproxy/spoe.conf`
   and `haproxy.cfg`
-  ([responses](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/haproxy.md#responses)).
+  ([responses](https://github.com/inkwall-dev/inkwall/blob/v0.6.1/docs/haproxy.md#responses)).
 - **The standalone proxy inspects responses**: `inkwall-engine proxy --inspect-responses`, with at
   most `--max-held-response-bytes` (64 MiB) of bodies held at once
-  ([responses](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/standalone-proxy.md#responses)).
+  ([responses](https://github.com/inkwall-dev/inkwall/blob/v0.6.1/docs/standalone-proxy.md#responses)).
 - **Streamed responses, event by event**: `responses: {inspect: true, streams: Inspect}` inspects
   each Server-Sent Event and each message of a gRPC response on its own, through Envoy Gateway and
   Istio (`--response-streams inspect` for raw Envoy and the standalone proxy); in `Block` mode a
@@ -135,7 +135,7 @@ set them.
   leaving the pod crash-looping; an image whose tag isn't a release gets only the flags every
   release knows. The new `EngineConfigured` condition on the `InkwallConfig`, and a Warning Event,
   name the settings left out. Pin a custom build with its version in the tag
-  (`:0.6.0@sha256:...`).
+  (`:0.6.1@sha256:...`).
 
 The security fixes of 0.6.0, also in 0.5.4 and 0.4.3, change these:
 
@@ -168,7 +168,7 @@ The security fixes of 0.6.0, also in 0.5.4 and 0.4.3, change these:
   ([GHSA-9rmr-w4mp-34f3](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-9rmr-w4mp-34f3)).
   The operator rewrites the HAProxy Ingresses' snippets on its first reconcile. With HAProxy
   configured by hand, add the two rules after the engine's verdict
-  ([WebSocket](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/haproxy.md#websocket)):
+  ([WebSocket](https://github.com/inkwall-dev/inkwall/blob/v0.6.1/docs/haproxy.md#websocket)):
 
   ```haproxy
   http-request del-header upgrade unless { req.fhdr_cnt(upgrade) eq 1 } { req.fhdr(upgrade) -m str -i websocket }
@@ -273,7 +273,7 @@ What changes by itself:
 
 With HAProxy configured by hand, add the new rule of the example configuration before the
 fail-closed rule, and leave it out in detect mode
-([the complete haproxy.cfg](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/haproxy.md#the-complete-haproxycfg)):
+([the complete haproxy.cfg](https://github.com/inkwall-dev/inkwall/blob/v0.6.1/docs/haproxy.md#the-complete-haproxycfg)):
 
 ```haproxy
 http-request deny deny_status 413 if { var(txn.inkwall.error) -m int 3 259 }
@@ -878,5 +878,5 @@ Roll back to 0.2.2 rather than 0.2.0 or 0.2.1, which are affected by GHSA-r5cq-6
 Upgrade to 0.2.2 first, then to 0.2.3 ([From 0.2.2 to 0.2.3](#from-022-to-023)). On the way, every `WAFPolicy` gets the finalizer `waf.inkwall.dev/unwire`
 (from 0.1.0), which matters if Argo CD or Flux manages them ([GitOps](/docs/gitops/)), and bundles
 past 900 KiB compressed are split into chunk Secrets, which 0.1.x can't read. The full guide's
-[0.1.x section](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/upgrading.md#from-01x-to-022)
+[0.1.x section](https://github.com/inkwall-dev/inkwall/blob/v0.6.1/docs/upgrading.md#from-01x-to-022)
 lists every change and how to roll back.
