@@ -1,6 +1,6 @@
 ---
 title: Roadmap
-description: What each release ships, from v0.1.0 to v0.6.0, and what the next milestones bring.
+description: What each release ships, from v0.1.0 to v0.6.1, and what the next milestones bring.
 order: 11
 ---
 
@@ -243,6 +243,20 @@ announced with ([release post](/blog/inkwall-v0-6-0/)):
 - The battle test ([#600](https://github.com/inkwall-dev/inkwall/issues/600)): a soak of every
   proxy with chaos, the false positives of an application's recorded traffic per paranoia level,
   and the latency each proxy adds ([How it works](/docs/how-it-works/#measured)).
+
+## v0.6.1: fixes from the scan after v0.6.0
+
+A patch release ([milestone](https://github.com/inkwall-dev/inkwall/milestone/24)), after the
+docs, security and battle-test scan that followed v0.6.0:
+
+- [GHSA-r678-m82v-mwxw](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-r678-m82v-mwxw)
+  (medium): Traefik before v3.7 forwards `Upgrade: h2c`, so requests sent on an upgraded
+  connection reach an app that accepts h2c uninspected. Upgrade Traefik to v3.7 or later; a
+  policy whose routes such a Traefik serves now says so in its `Programmed` message.
+- `Enforced` waits for every engine of raw Envoy and the standalone proxy, including one that is
+  reconnecting or cut off from the operator.
+- A rule set ending in an open `chain` is refused; a panic on one proxy connection no longer stops
+  the engine; the first event of an SSE stream that starts with a byte order mark is inspected.
 
 ## v1.0.0: a stable API, next
 

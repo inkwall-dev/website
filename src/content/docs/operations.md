@@ -115,7 +115,7 @@ reads the engine's release from the image's tag and injects only the flags that 
 pinned older engine starts instead of exiting on a flag it doesn't know; an image whose tag isn't a
 release (`latest`, a digest alone) gets only the flags every release knows. The `EngineConfigured`
 condition, and a Warning Event, name the settings left out. Pin a custom build with its version in
-the tag (`:0.6.0@sha256:...`) to keep every setting.
+the tag (`:0.6.1@sha256:...`) to keep every setting.
 
 ## Proxy namespaces
 
@@ -134,7 +134,7 @@ else is an ordinary pod. List only namespaces where only the people who run the 
 If your proxy runs in another namespace, list it, with the defaults you still need:
 
 ```sh
-helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.6.0 \
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.6.1 \
   --namespace inkwall-system --reset-then-reuse-values \
   --set 'injection.proxyNamespaces={ingress,envoy-gateway-system}'
 ```
@@ -196,7 +196,7 @@ the metrics (`networkPolicy.metricsFrom`). `networkPolicy.egress.enabled: true` 
 the chart's pods connect to. Engines run in the proxies' namespaces, which the chart doesn't own: if
 those deny by default, let the engines reach the operator's port 9445 and the API server. The chart
 README has the
-[network flows](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/deploy/helm/inkwall/README.md#network-flows).
+[network flows](https://github.com/inkwall-dev/inkwall/blob/v0.6.1/deploy/helm/inkwall/README.md#network-flows).
 
 ## Chart values
 
@@ -205,7 +205,7 @@ Since 0.5.0, the chart checks its values against a schema: `helm install`, `upgr
 0.4.x ignored it. Run `helm upgrade ... --dry-run` first. It also takes private registries
 (`global.imageRegistry`, `global.imagePullSecrets`), image digests, extra env and volumes, and
 topology spread
-([private registries](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/deploy/helm/inkwall/README.md#private-registries)).
+([private registries](https://github.com/inkwall-dev/inkwall/blob/v0.6.1/deploy/helm/inkwall/README.md#private-registries)).
 The chart works with Helm 3 and Helm 4.
 
 ## Proxies with other labels
@@ -234,7 +234,7 @@ operator unwires the routes (`SidecarMissing`) until one matches again.
 ## Turning injection off
 
 ```sh
-helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.6.0 \
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.6.1 \
   --namespace inkwall-system --reset-then-reuse-values --set injection.enabled=false
 ```
 
@@ -314,4 +314,4 @@ The CRDs, your `WAFPolicy` objects and the operator's Secrets (the bundle, its c
 key) are kept, so a reinstall continues with the same keys. To remove the Secrets, delete the
 namespace.
 
-More in the [chart README](https://github.com/inkwall-dev/inkwall/tree/v0.6.0/deploy/helm/inkwall).
+More in the [chart README](https://github.com/inkwall-dev/inkwall/tree/v0.6.1/deploy/helm/inkwall).

@@ -4,7 +4,7 @@ description: Install Inkwall with Helm, protect a Traefik or Envoy Gateway route
 order: 1
 ---
 
-> Inkwall v0.6.0 works with **Traefik** (`Ingress`, `IngressRoute` and Gateway API `HTTPRoute`
+> Inkwall v0.6.1 works with **Traefik** (`Ingress`, `IngressRoute` and Gateway API `HTTPRoute`
 > routes), **Envoy Gateway** and **Istio** (`HTTPRoute` routes, and Istio's `VirtualService`
 > routes), and the **HAProxy Kubernetes Ingress Controller** (`Ingress` routes); and, without the
 > operator, with an Envoy or HAProxy you configure yourself. What each one inspects is on
@@ -12,15 +12,15 @@ order: 1
 > `v1alpha1` and will change. Upgrading from 0.5.x? See [Upgrading](/docs/upgrading/).
 
 To try it on your laptop first, the
-[quickstart](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/quickstart.md) goes from
+[quickstart](https://github.com/inkwall-dev/inkwall/blob/v0.6.1/docs/quickstart.md) goes from
 nothing to a blocked attack in about five minutes, on a kind cluster with the released chart,
-Traefik and a demo app; [`examples/`](https://github.com/inkwall-dev/inkwall/tree/v0.6.0/examples)
+Traefik and a demo app; [`examples/`](https://github.com/inkwall-dev/inkwall/tree/v0.6.1/examples)
 has the same app behind Traefik, Envoy Gateway and Istio.
 
 ## Install
 
 ```sh
-helm install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.6.0 \
+helm install inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.6.1 \
   --namespace inkwall-system --create-namespace
 kubectl -n inkwall-system rollout status deployment/inkwall-operator
 ```
@@ -30,6 +30,9 @@ install with its name.
 
 Then install Traefik, or restart it if it already runs: Traefik pods started after the operator get
 the engine as a sidecar.
+Use Traefik v3.7 or later: before v3.7, Traefik forwards `Upgrade: h2c` to the app, and requests
+sent on such a connection reach an app that accepts h2c without the engine seeing them
+([GHSA-r678-m82v-mwxw](https://github.com/inkwall-dev/inkwall/security/advisories/GHSA-r678-m82v-mwxw)).
 
 ```sh
 kubectl -n <traefik namespace> rollout restart deployment/<traefik>
@@ -158,7 +161,7 @@ Each blocked or detected request logs one JSON line with the rule IDs and where 
 `:9480/metrics`. Since 0.6.0, in a container with a memory limit (`docker run --memory 256m`), the
 engine sets its Go memory limit to 90% of it. The proxy accepts only origin-form request targets (`GET /path`): an absolute-form
 target (`GET http://host/path`) or an invalid `Host` gets a 400. The guide,
-[running the engine without Kubernetes](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/standalone-proxy.md),
+[running the engine without Kubernetes](https://github.com/inkwall-dev/inkwall/blob/v0.6.1/docs/standalone-proxy.md),
 also covers the engine's `forward-auth`, `check`, `ext-proc` (Envoy's external processing API over
 gRPC) and `spoe` (HAProxy's SPOE) modes; see [Proxies](/docs/proxies/).
 

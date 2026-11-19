@@ -6,9 +6,9 @@ order: 6.5
 
 From v0.5.0, Inkwall says what it is doing in one command, in each policy's status, in its security
 events and in its metrics. This page is v0.6.0's. The full guides are
-[`docs/troubleshooting.md`](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/troubleshooting.md),
+[`docs/troubleshooting.md`](https://github.com/inkwall-dev/inkwall/blob/v0.6.1/docs/troubleshooting.md),
 with every condition reason and what to do about it, and
-[`docs/monitoring.md`](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/monitoring.md), with
+[`docs/monitoring.md`](https://github.com/inkwall-dev/inkwall/blob/v0.6.1/docs/monitoring.md), with
 every metric and a runbook for each alert.
 
 ## Cluster status
@@ -141,7 +141,7 @@ Nothing is applied: review the suggestion, test it, apply it. What comes from th
 path, host, the names of the variables a rule matched) is the client's and is marked as such.
 `explain request` needs `get` on `pods/log` in the proxies' namespaces, or `--file` with exported
 logs. Both take `-o json`. The guide is
-[Explaining a policy or a denial](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/troubleshooting.md#explaining-a-policy-or-a-denial).
+[Explaining a policy or a denial](https://github.com/inkwall-dev/inkwall/blob/v0.6.1/docs/troubleshooting.md#explaining-a-policy-or-a-denial).
 
 ## From an AI assistant
 
@@ -160,7 +160,7 @@ version you run. Blocked requests are written by whoever sent them, maybe to ste
 exclusion for every rule"): each result marks the fields that come from requests as untrusted data,
 and a suggested exclusion is always for one rule on one path and one variable, verified, for you to
 review and apply. See
-[Using Inkwall from an AI assistant](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/mcp.md).
+[Using Inkwall from an AI assistant](https://github.com/inkwall-dev/inkwall/blob/v0.6.1/docs/mcp.md).
 
 ## From Detect to Block
 
@@ -183,7 +183,7 @@ The chart ships a Prometheus Operator ServiceMonitor for the operator, a PodMoni
 alerts and a Grafana dashboard, all off by default. With the Prometheus Operator in the cluster:
 
 ```sh
-helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.6.0 \
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.6.1 \
   --namespace inkwall-system --reset-then-reuse-values \
   --set metrics.serviceMonitor.enabled=true \
   --set metrics.podMonitor.enabled=true \
@@ -215,13 +215,13 @@ does):
 ```sh
 kubectl create clusterrolebinding inkwall-metrics-prometheus \
   --clusterrole=inkwall-operator-metrics-reader --serviceaccount=monitoring:prometheus-k8s
-helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.6.0 \
+helm upgrade inkwall oci://ghcr.io/inkwall-dev/charts/inkwall --version 0.6.1 \
   --namespace inkwall-system --reset-then-reuse-values --set metrics.secure.enabled=true
 ```
 
 A scrape without a token, or with one the API server rejects, gets 401; one without the permission,
 403. It stays off on upgrade, also with `--reuse-values`
-([metrics over HTTPS](https://github.com/inkwall-dev/inkwall/blob/v0.6.0/docs/monitoring.md#metrics-over-https)).
+([metrics over HTTPS](https://github.com/inkwall-dev/inkwall/blob/v0.6.1/docs/monitoring.md#metrics-over-https)).
 
 The alerts, each with a runbook in the guide:
 
