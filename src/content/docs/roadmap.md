@@ -258,27 +258,39 @@ docs, security and battle-test scan that followed v0.6.0:
 - A rule set ending in an open `chain` is refused; a panic on one proxy connection no longer stops
   the engine; the first event of an SSE stream that starts with a byte order mark is inspected.
 
-## v0.7.0: ready for production, and rate limits, next
+## v0.7.0: the first release to run in production, next
 
-The [milestone](https://github.com/inkwall-dev/inkwall/milestone/25) gets Inkwall ready to run in
-production before the API is frozen, and adds rate limits:
+The [milestone](https://github.com/inkwall-dev/inkwall/milestone/25) is the release to start
+testing Inkwall in production with: the features a production deployment needs, and everything
+left open after v0.6.1. It is tagged only when its
+[release gate](https://github.com/inkwall-dev/inkwall/issues/727) passes: a 24-hour soak with chaos,
+false positives measured on more applications, a first install by a new user from the docs alone,
+a security review of everything new, and upgrades and rollback tested for every proxy.
 
-- **Rate limits** in policies, answered with `429`, designed first and then built
+- **Rate limits** in policies, answered with `429`
   ([#705](https://github.com/inkwall-dev/inkwall/issues/705)).
-- **Status you can trust everywhere**: the operator proves Envoy Gateway's routes, requests and
-  responses, as it does for Istio and HAProxy
-  ([#604](https://github.com/inkwall-dev/inkwall/issues/604)), and HAProxy tells a response body
+- **Geo blocking**: allow or deny clients by country, with a GeoIP database you provide
+  ([#724](https://github.com/inkwall-dev/inkwall/issues/724)).
+- **Security events to your SIEM** (Splunk, Elastic, Loki and others) without the control plane
+  ([#723](https://github.com/inkwall-dev/inkwall/issues/723)).
+- **Custom denial responses** per policy: an HTML page or a JSON document
+  ([#725](https://github.com/inkwall-dev/inkwall/issues/725)).
+- **An audit log** of who changed which policy, and when
+  ([#726](https://github.com/inkwall-dev/inkwall/issues/726)).
+- **Protecting LLM APIs** against the OWASP Top 10 for LLM applications
+  ([#277](https://github.com/inkwall-dev/inkwall/issues/277)), and **gRPC messages read with their
+  schema** ([#316](https://github.com/inkwall-dev/inkwall/issues/316)).
+- **Status you can trust everywhere**: Envoy Gateway's routes proven like Istio's and HAProxy's
+  ([#604](https://github.com/inkwall-dev/inkwall/issues/604)), and HAProxy telling a response body
   cut short from a whole one ([#559](https://github.com/inkwall-dev/inkwall/issues/559)).
-- **Tested longer and on more traffic**: a 24-hour soak with chaos every week
-  ([#706](https://github.com/inkwall-dev/inkwall/issues/706)), and false-positive rates measured
-  on more applications ([#707](https://github.com/inkwall-dev/inkwall/issues/707)).
 - **The API reviewed before v1**, so v1.0.0 is a clean promotion
   ([#708](https://github.com/inkwall-dev/inkwall/issues/708)).
 - **Easier to adopt**: a production checklist
-  ([#709](https://github.com/inkwall-dev/inkwall/issues/709)), the docs fixed from a new user's
-  first install ([#710](https://github.com/inkwall-dev/inkwall/issues/710)), and
+  ([#709](https://github.com/inkwall-dev/inkwall/issues/709)), and
   `inkwallctl migrate ingress-nginx` placing rules that must run first before the CRS
   ([#554](https://github.com/inkwall-dev/inkwall/issues/554)).
+- WebSocket messages through Envoy ([#313](https://github.com/inkwall-dev/inkwall/issues/313))
+  are in the milestone too, but depend on a change in Envoy's `ext_proc`.
 
 ## v1.0.0: a stable API
 
@@ -286,12 +298,7 @@ The CRDs out of `v1alpha1`, with an upgrade path and a compatibility promise.
 
 ## Later
 
-- WebSocket messages through Envoy (Envoy Gateway, Istio, raw Envoy), which needs a change in
-  Envoy's `ext_proc` ([#313](https://github.com/inkwall-dev/inkwall/issues/313)).
-- gRPC messages read with their schema
-  ([#316](https://github.com/inkwall-dev/inkwall/issues/316)).
-- Protecting LLM APIs against the OWASP Top 10 for LLM applications
-  ([#277](https://github.com/inkwall-dev/inkwall/issues/277)).
+Nothing else is scheduled after v1.0.0 yet.
 
 ingress-nginx is not planned: it is retired upstream. For its users, Inkwall's answer is
 migration: `inkwallctl migrate ingress-nginx` turns its ModSecurity annotations into policies, see
