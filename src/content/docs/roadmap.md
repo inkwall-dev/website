@@ -1,6 +1,6 @@
 ---
 title: Roadmap
-description: What each release ships, from v0.1.0 to v0.6.1, and what the next milestones bring.
+description: What each release ships, from v0.1.0 to v0.6.1, and what v0.7.0 and v1.0.0 bring.
 order: 11
 ---
 
@@ -258,7 +258,29 @@ docs, security and battle-test scan that followed v0.6.0:
 - A rule set ending in an open `chain` is refused; a panic on one proxy connection no longer stops
   the engine; the first event of an SSE stream that starts with a byte order mark is inspected.
 
-## v1.0.0: a stable API, next
+## v0.7.0: ready for production, and rate limits, next
+
+The [milestone](https://github.com/inkwall-dev/inkwall/milestone/25) gets Inkwall ready to run in
+production before the API is frozen, and adds rate limits:
+
+- **Rate limits** in policies, answered with `429`, designed first and then built
+  ([#705](https://github.com/inkwall-dev/inkwall/issues/705)).
+- **Status you can trust everywhere**: the operator proves Envoy Gateway's routes, requests and
+  responses, as it does for Istio and HAProxy
+  ([#604](https://github.com/inkwall-dev/inkwall/issues/604)), and HAProxy tells a response body
+  cut short from a whole one ([#559](https://github.com/inkwall-dev/inkwall/issues/559)).
+- **Tested longer and on more traffic**: a 24-hour soak with chaos every week
+  ([#706](https://github.com/inkwall-dev/inkwall/issues/706)), and false-positive rates measured
+  on more applications ([#707](https://github.com/inkwall-dev/inkwall/issues/707)).
+- **The API reviewed before v1**, so v1.0.0 is a clean promotion
+  ([#708](https://github.com/inkwall-dev/inkwall/issues/708)).
+- **Easier to adopt**: a production checklist
+  ([#709](https://github.com/inkwall-dev/inkwall/issues/709)), the docs fixed from a new user's
+  first install ([#710](https://github.com/inkwall-dev/inkwall/issues/710)), and
+  `inkwallctl migrate ingress-nginx` placing rules that must run first before the CRS
+  ([#554](https://github.com/inkwall-dev/inkwall/issues/554)).
+
+## v1.0.0: a stable API
 
 The CRDs out of `v1alpha1`, with an upgrade path and a compatibility promise.
 
